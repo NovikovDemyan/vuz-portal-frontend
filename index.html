@@ -196,6 +196,10 @@
     function renderRolePanel() {
         // Скрыть интерфейс заполнения при переходе в панель
         document.getElementById('filling-interface-container').style.display = 'none';
+        // Показать кнопки сохранения для Студента при возвращении к списку
+        document.getElementById('save-draft-btn').style.display = 'inline-block';
+        document.getElementById('submit-btn').style.display = 'inline-block';
+        
         const panel = document.getElementById('role-panel');
         panel.style.display = 'block';
         panel.innerHTML = '<h2>Рабочая Область</h2>';
@@ -248,6 +252,45 @@
 
     // --- ЛОГИКА ЗАПОЛНЕНИЯ ДОКУМЕНТА (КЛЮЧЕВАЯ ФУНКЦИЯ) ---
 
+    // Вспомогательная функция для безопасного извлечения значения из заполненного текста
+    function extractFieldValue(fieldName, templateContent, currentContent) {
+        // Мы ищем значение между тем, что предшествует маркеру, и тем, что следует за ним.
+        // ЭТОТ МЕТОД ОЧЕНЬ СЛОЖНЫЙ И НЕОПТИМАЛЬНЫЙ ДЛЯ PRODUCTION!
+        // В идеале, заполненные данные должны храниться в JSON, но для текущей текстовой модели:
+        
+        // 1. Находим все маркеры и их окружающий текст в шаблоне
+        const templateParts = templateContent.split(/\{\{.*?\}\}/g);
+        const markers = [...templateContent.matchAll(/\{\{(.*?)\}\}/g)].map(m => m[1].trim());
+
+        const targetMarkerIndex = markers.findIndex(m => m === fieldName);
+        if (targetMarkerIndex === -1) return '';
+
+        // 2. Определяем левый и правый ограничители
+        const leftBoundary = templateParts[targetMarkerIndex];
+        const rightBoundary = templateParts[targetMarkerIndex + 1];
+
+        // 3. Используем регулярное выражение для извлечения значения
+        // Экранируем спецсимволы и заменяем переносы строки на \s*
+        const escapedLeft = leftBoundary.replace(/([.*+?^=!:${}()|[\]\/\\])/g,"\\$1").replace(/\n/g, '\\s*');
+        const escapedRight = rightBoundary.replace(/([.*+?^=!:${}()|[\]\/\\])/g,"\\$1").replace(/\n/g, '\\s*');
+        
+        // Поиск значения между границами. Используем (.*?) для нежадного поиска.
+        const regexString = `${escapedLeft}(.*?)${escapedRight}`;
+        try {
+            const contentRegex = new RegExp(regexString, 's'); // 's' flag для . совпадения с \n
+            const match = currentContent.match(contentRegex);
+            
+            if (match && match[1] !== undefined) {
+                // Возвращаем найденное значение, удалив лишние пробелы/переносы
+                return match[1].trim(); 
+            }
+        } catch (e) {
+            console.error('Ошибка при создании regex:', e);
+        }
+        
+        return '';
+    }
+
     async function showDocumentFillingInterface(docId, docTitle, docStatus) {
         document.getElementById('role-panel').style.display = 'none';
         const container = document.getElementById('filling-interface-container');
@@ -255,8 +298,13 @@
         document.getElementById('current-doc-title').textContent = docTitle;
         currentDocumentId = docId;
         
+        // Показать кнопки сохранения для Студента
+        document.getElementById('save-draft-btn').style.display = 'inline-block';
+        document.getElementById('submit-btn').style.display = 'inline-block';
+        
         const editor = document.getElementById('document-content-editor');
         editor.innerHTML = 'Загрузка...';
+        clearMessages();
 
         try {
             const response = await fetch(`${API_URL}/api/documents/${docId}`, {
@@ -266,8 +314,8 @@
 
             if (data.success) {
                 const doc = data.document;
-                // Используем currentContent, так как он содержит заполненные данные (если есть)
-                const content = doc.currentContent || doc.templateContent; 
+                const template = doc.templateContent; // Шаблон с маркерами {{fieldName}}
+                const current = doc.currentContent; // Текущий заполненный текст
                 
                 // 1. Находим все маркеры вида {{fieldName}}
                 const regex = /\{\{(.*?)\}\}/g;
@@ -275,27 +323,34 @@
                 let htmlOutput = '';
                 let lastIndex = 0;
 
-                while ((match = regex.exec(content)) !== null) {
-                    const fieldName = match[1].trim(); // Например, 'studentName'
-                    const marker = match[0]; // Например, '{{studentName}}'
-                    const textBefore = content.substring(lastIndex, match.index);
+                while ((match = regex.exec(template)) !== null) {
+                    const fieldName = match[1].trim(); 
+                    const marker = match[0]; 
+                    const textBefore = template.substring(lastIndex, match.index);
+                    
+                    // Извлекаем предыдущее значение (если оно есть)
+                    const extractedValue = extractFieldValue(fieldName, template, current);
 
                     // Добавляем текст до маркера
-                    htmlOutput += textBefore.replace(/\n/g, '<br>'); // Заменяем переносы строки на <br>
+                    htmlOutput += textBefore.replace(/\n/g, '<br>'); 
 
-                    // Добавляем поле ввода
-                    // Используем атрибут data-marker для сохранения имени поля
+                    // Добавляем поле ввода с заполненным значением
                     htmlOutput += `
                         <div class="fillable-field">
                             <label for="${fieldName}">[${fieldName}]:</label>
-                            <input type="text" id="${fieldName}" data-marker="${marker}" data-field-name="${fieldName}" style="width: 200px;">
+                            <input type="text" 
+                                id="${fieldName}" 
+                                data-marker="${marker}" 
+                                data-field-name="${fieldName}" 
+                                value="${extractedValue}" 
+                                style="width: 200px;">
                         </div>
                     `;
 
                     lastIndex = regex.lastIndex;
                 }
                 // Добавляем оставшийся текст после последнего маркера
-                htmlOutput += content.substring(lastIndex).replace(/\n/g, '<br>');
+                htmlOutput += template.substring(lastIndex).replace(/\n/g, '<br>');
 
                 editor.innerHTML = htmlOutput;
                 
@@ -306,17 +361,6 @@
                 if(isCompleted) {
                     showMessage('success', 'Документ отправлен на проверку. Редактирование невозможно.');
                 }
-                
-                // --- 2. ЭКСТРАКТОР: Если в currentContent уже есть заполненные данные, заполняем input-ы ---
-                // Поскольку мы не знаем формат заполненных данных, мы будем ожидать, что бэкенд возвращает
-                // текст, где маркеры заменены на реальные значения.
-                // В нашей текущей модели currentContent - это уже текст с заменами. 
-                // Чтобы сохранить заполненные данные, нам нужно их "обратно" извлечь из полей.
-                
-                // Для простоты, оставим currentContent как исходный текст (TemplateContent) 
-                // и будем использовать его для сохранения. 
-                // При следующем открытии, поля будут пустыми, если мы не внедрим сложный парсер. 
-                // *ПРИМЕЧАНИЕ*: Для production нужно будет хранить заполненные данные в виде JSON, а не текста.
                 
             } else {
                 editor.innerHTML = `<p class="error">${data.message}</p>`;
@@ -335,9 +379,8 @@
 
         const editor = document.getElementById('document-content-editor');
         const inputFields = editor.querySelectorAll('input[data-marker]');
-        let newContent = ''; // Это будет финальный текст для сохранения
-
-        // 1. Получаем исходный шаблон (нужно получить его снова, чтобы восстановить структуру)
+        
+        // 1. Получаем исходный шаблон
         const docResponse = await fetch(`${API_URL}/api/documents/${currentDocumentId}`, {
             headers: { 'Authorization': `Bearer ${getToken()}` },
         });
@@ -346,20 +389,24 @@
             showMessage('error', 'Не удалось получить исходный шаблон документа для сохранения.');
             return;
         }
-        let contentToUpdate = docData.document.templateContent; // Используем templateContent как базу
+        
+        // Используем templateContent как базу для замены
+        let contentToUpdate = docData.document.templateContent; 
 
         // 2. Заменяем маркеры в templateContent на данные из полей ввода
         inputFields.forEach(input => {
-            const marker = input.getAttribute('data-marker'); // Например, {{fieldName}}
-            const value = input.value || ''; // Значение, которое ввел студент
+            const marker = input.getAttribute('data-marker'); 
+            const value = input.value || ''; 
 
             // Замена маркера на реальное значение
-            // NOTE: Мы заменяем *только* в тексте, который отправляем на сервер.
-            // На сервере хранится текст с заполненными данными.
-            contentToUpdate = contentToUpdate.replace(new RegExp(marker.replace(/([.*+?^=!:${}()|[\]\/\\])/g,"\\$1"), 'g'), value);
+            // Экранируем спецсимволы в маркере для RegExp и заменяем глобально
+            contentToUpdate = contentToUpdate.replace(
+                new RegExp(marker.replace(/([.*+?^=!:${}()|[\]\/\\])/g,"\\$1"), 'g'), 
+                value
+            );
         });
         
-        newContent = contentToUpdate;
+        const newContent = contentToUpdate;
 
         try {
             const response = await fetch(`${API_URL}/api/documents/${currentDocumentId}`, {
@@ -384,6 +431,7 @@
     }
 
     // --- ПАНЕЛЬ ПРЕПОДАВАТЕЛЯ/КУРАТОРА ---
+    // (createDocument и renderTeacherPanel без изменений)
 
     async function renderTeacherPanel(panel) {
         panel.innerHTML += '<h3>Управление Заданиями</h3>';
@@ -418,7 +466,7 @@
                             <span>${doc.title} (Кому: ${doc.targetStudentEmail})</span>
                             <span class="status-${doc.status}">Статус: ${doc.status}</span>
                         `;
-                        // Преподаватель может посмотреть заполненный документ, но не редактировать
+                        // Преподаватель может посмотреть заполненный документ
                         item.onclick = () => viewCompletedDocument(doc.id, doc.title, doc.status, doc.targetStudentEmail);
                         list.appendChild(item);
                     });
@@ -476,9 +524,10 @@
         const editor = document.getElementById('document-content-editor');
         editor.innerHTML = 'Загрузка...';
 
-        // Скрыть кнопки сохранения для преподавателя
+        // СКРЫТЬ кнопки сохранения для преподавателя
         document.getElementById('save-draft-btn').style.display = 'none';
         document.getElementById('submit-btn').style.display = 'none';
+        clearMessages();
 
         try {
             const response = await fetch(`${API_URL}/api/documents/${docId}`, {
@@ -489,16 +538,17 @@
             if (data.success) {
                 const doc = data.document;
                 // Преподаватель видит текущее заполненное содержимое
-                const content = doc.currentContent; 
+                const content = doc.currentContent || doc.templateContent; // Если нет заполненного, показать шаблон
                 
                 // Просто отображаем текст, заменяя переносы строки.
+                // NOTE: white-space: pre-wrap; в CSS нужен, чтобы сохранить переносы из базы.
                 editor.innerHTML = `
                     <p><strong>Текущий статус:</strong> <span class="status-${docStatus}">${docStatus}</span></p>
                     <div style="border: 1px dashed #333; padding: 15px; white-space: pre-wrap;">${content}</div>
                 `;
                 
                 if (docStatus !== 'completed') {
-                    showMessage('error', 'Студент еще не завершил заполнение этого документа.');
+                    showMessage('error', 'Студент еще не завершил заполнение этого документа (Статус: ' + docStatus + ').');
                 } else {
                     showMessage('success', 'Документ заполнен студентом и готов к проверке.');
                 }
