@@ -35,7 +35,7 @@
         .document-card { border: 1px solid #ccc; padding: 10px; margin-bottom: 15px; border-radius: 6px; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
         .document-card h4 { margin-top: 0; color: #28a745;}
         .document-card .doc-part { display: inline-block; padding: 0; margin: 0; line-height: 2.2; }
-        .document-card input[type="text"] { margin-bottom: 5px; width: auto; display: inline-block; padding: 5px; }
+        .document-card input[type="text"], .document-card input[type="date"] { margin-bottom: 5px; width: auto; display: inline-block; padding: 5px; }
         .document-card button { width: auto; margin-left: 10px; margin-top: 5px; padding: 8px 12px; }
         /* Стиль для заполненных данных */
         .document-card .prefilled { font-weight: bold; padding: 5px 8px; border-radius: 4px; border: 1px dashed gray; background-color: #e0f0e0;} 
@@ -116,7 +116,7 @@
         </div>
 
         <div id="student-panel" class="hidden">
-            <h3>Документы, ожидающие заполнения</h3>
+            <h3>Документы, ожидающие заполнения / доработки</h3>
             <button id="show-student-docs-btn">Обновить Список Документов</button>
             <div id="student-docs-list"></div>
         </div>
@@ -156,9 +156,8 @@
         const showTeacherDocsBtn = document.getElementById('show-teacher-docs-btn');
         const teacherDocsList = document.getElementById('teacher-docs-list');
         
-        // --- СПИСОК ШАБЛОНОВ (Должен соответствовать server.js для корректной генерации формы) ---
+        // --- СПИСОК ШАБЛОНОВ ---
         const templateParts = {
-            // Фронтенд использует эту структуру для генерации форм
             'Заявление на Отпуск': [
                 { type: "text", content: "Я, Студент " },
                 { type: "input", name: "Фамилия_Имя", role: "Студент" },
@@ -299,7 +298,7 @@
             }
         }
 
-        // --- ЛОГИКА: ФУНКЦИЯ ПРОСМОТРА ВСЕХ ПОЛЬЗОВАТЕЛЕЙ (КУРАТОР) ---
+        // --- ЛОГИКА: ПРОСМОТР ВСЕХ ПОЛЬЗОВАТЕЛЕЙ (КУРАТОР) ---
         async function fetchUsers() {
             usersTableContainer.innerHTML = 'Загрузка...';
             const token = localStorage.getItem('authToken');
@@ -483,6 +482,52 @@
                         const contentDiv = card.querySelector(`.document-content-${doc.id}`);
                         const prefilledData = doc.submitted_data || {};
                         
+                        // НОВЫЙ БЛОК: Действия преподавателя
+                        if (doc.status === 'Заполнено') {
+                            card.innerHTML += `
+                                <div class="teacher-review-form" data-doc-id="${doc.id}">
+                                    <hr style="margin: 10px 0;">
+                                    <h5>Действия по документу:</h5>
+                                    <form id="review-form-${doc.id}" style="border: 1px solid #ffc107; padding: 10px; border-radius: 4px; background: #fffde7; margin-top: 10px;">
+                                        <p style="font-weight: bold; color: #28a745;">1. Одобрить и отправить Куратору:</p>
+                                        <input type="text" name="documentNumber" placeholder="Введите № документа (обязательно)" style="width: 100%; margin-bottom: 5px;">
+                                        <input type="date" name="documentDate" style="width: 100%; margin-bottom: 10px;">
+                                        <button type="button" class="btn-approve" data-doc-id="${doc.id}" style="background-color: #28a745;">Одобрить и Куратору</button>
+                                        
+                                        <hr style="margin: 15px 0 10px 0; border-color: #ddd;">
+
+                                        <p style="font-weight: bold; color: #dc3545;">2. Отправить на доработку:</p>
+                                        <textarea name="reason" placeholder="Укажите причину доработки (опционально, но рекомендуется)" style="width: 100%; height: 60px;"></textarea>
+                                        <button type="button" class="btn-reject" data-doc-id="${doc.id}" style="background-color: #dc3545;">На Доработку</button>
+                                    </form>
+                                </div>
+                            `;
+                            
+                            // Добавляем слушателей событий
+                            // Используем setTimeout(..., 0) для гарантированной доступности элементов в DOM
+                            setTimeout(() => {
+                                const approveBtn = card.querySelector(`.btn-approve[data-doc-id="${doc.id}"]`);
+                                const rejectBtn = card.querySelector(`.btn-reject[data-doc-id="${doc.id}"]`);
+                                const form = card.querySelector(`#review-form-${doc.id}`);
+
+                                if (approveBtn && rejectBtn && form) {
+                                    approveBtn.addEventListener('click', () => handleTeacherReview(doc.id, form, 'APPROVE'));
+                                    rejectBtn.addEventListener('click', () => handleTeacherReview(doc.id, form, 'REJECT'));
+                                }
+                            }, 0);
+                        } 
+                        // Отображение статусов доработки/утверждения
+                        else if (doc.status === 'Одобрено, Куратору') {
+                            const number = prefilledData.documentNumber || 'Н/Д';
+                            const date = prefilledData.documentDate || 'Н/Д';
+                            card.innerHTML += `<p style="color: #007bff; font-weight: bold; margin-top: 10px;">ФИНАЛИЗАЦИЯ: Документ №${number} от ${date} отправлен Куратору.</p>`;
+                        }
+                        else if (doc.status === 'На доработку') {
+                            const reason = prefilledData.review_reason || 'Причина не указана.';
+                            card.innerHTML += `<p style="color: #dc3545; font-weight: bold; margin-top: 10px;">ТРЕБУЕТ ДОРАБОТКИ: Причина: ${reason}</p>`;
+                        }
+
+                        
                         // Генерация полного документа для просмотра
                         doc.template.parts.forEach(part => {
                             const partContainer = document.createElement('span');
@@ -544,7 +589,7 @@
 
                 if (response.ok && data.success) {
                     if (data.documents.length === 0) {
-                        studentDocsList.innerHTML = '<p>Нет документов, ожидающих заполнения.</p>';
+                        studentDocsList.innerHTML = '<p>Нет документов, ожидающих заполнения или доработки.</p>';
                         return;
                     }
 
@@ -552,14 +597,26 @@
                     data.documents.forEach(doc => {
                         const card = document.createElement('div');
                         card.className = 'document-card';
-                        card.innerHTML = `<h4>${doc.title} (ID: ${doc.id})</h4>`;
+                        
+                        let titleText = doc.title;
+                        const prefilledData = doc.submitted_data || {};
+
+                        // Проверка на статус "На доработку"
+                        if (doc.status === 'На доработку') {
+                            titleText = `(❗ ТРЕБУЕТ ДОРАБОТКИ) ${doc.title}`;
+                            const reason = prefilledData.review_reason || 'Причина не указана.';
+                            card.innerHTML += `<p style="color: #dc3545; font-weight: bold;">ПРИЧИНА ДОРАБОТКИ: ${reason}</p>`;
+                        }
+                        
+                        card.innerHTML += `<h4>${titleText} (ID: ${doc.id})</h4>`;
+
 
                         const form = document.createElement('form');
                         form.dataset.docId = doc.id;
                         form.className = 'document-form';
                         
-                        // studentData больше не используется для сбора данных, только для API (мы его заполним в обработчике submit)
-                        const prefilledData = doc.submitted_data || {};
+                        const isActiveSubmission = doc.status === 'Ожидает заполнения' || doc.status === 'На доработку';
+
 
                         // Генерация формы на основе шаблона
                         doc.template.parts.forEach(part => {
@@ -571,33 +628,29 @@
                             } else if (part.type === 'input') {
                                 const isPrefilled = prefilledData[part.name] !== undefined && prefilledData[part.name] !== '';
 
-                                // 1. Если поле уже заполнено (преподавателем)
-                                if (isPrefilled && part.role === 'Преподаватель') {
-                                    // Показываем как заполненный неактивный текст
-                                    partContainer.innerHTML = `<span class="prefilled" style="background-color: #e6f0ff;">${prefilledData[part.name]}</span>`;
+                                // 1. Если поле заполнено (преподавателем)
+                                if (part.role === 'Преподаватель') {
+                                    const displayValue = isPrefilled ? prefilledData[part.name] : (isActiveSubmission ? '[ОЖИДАЕТСЯ ВВОД ПРЕПОДАВАТЕЛЯ]' : 'Н/Д');
+                                    const styleColor = isPrefilled ? '#e6f0ff' : 'red';
+                                    partContainer.innerHTML = `<span class="prefilled" style="background-color: ${styleColor};">${displayValue}</span>`;
                                 } 
-                                // 2. Если поле должно быть заполнено студентом
-                                else if (part.role === 'Студент') {
+                                // 2. Если поле должно быть заполнено студентом И активна доработка
+                                else if (part.role === 'Студент' && isActiveSubmission) {
+                                    const input = document.createElement('input');
+                                    input.type = 'text';
+                                    input.name = part.name;
+                                    input.placeholder = `[Ваш ввод: ${part.name}]`;
+                                    input.required = true; 
+                                    
+                                    // Предзаполняем, если есть предыдущие данные (для доработки)
                                     if (isPrefilled) {
-                                        // Если студент уже начал заполнять, показываем его ввод как заполненный, но неактивный
-                                        partContainer.innerHTML = `<span class="prefilled">${prefilledData[part.name]}</span>`;
-                                    } else {
-                                        // Иначе, показываем поле ввода (активное)
-                                        const input = document.createElement('input');
-                                        input.type = 'text';
-                                        input.name = part.name;
-                                        input.placeholder = `[Ваш ввод: ${part.name}]`;
-                                        input.required = true; 
-                                        
-                                        // *** УДАЛЕНО: input.addEventListener('input', ...) ***
-                                        // Мы будем читать значение из DOM прямо перед отправкой
-                                        
-                                        partContainer.appendChild(input);
+                                        input.value = prefilledData[part.name];
                                     }
-                                }
-                                // 3. Если поле должно было быть заполнено преподавателем, но пропущено
-                                else if (part.role === 'Преподаватель' && !isPrefilled) {
-                                    partContainer.innerHTML = `<span style="color: red; border: 1px solid red; padding: 5px;">[ОЖИДАЕТСЯ ВВОД ПРЕПОДАВАТЕЛЯ]</span>`;
+                                    partContainer.appendChild(input);
+                                } 
+                                // 3. Если поле студента, но документ уже отправлен/завершен (неактивен)
+                                else if (part.role === 'Студент' && !isActiveSubmission) {
+                                     partContainer.innerHTML = `<span class="prefilled">${isPrefilled ? prefilledData[part.name] : '[Не заполнено]'}</span>`;
                                 }
                             }
 
@@ -605,11 +658,14 @@
                             form.innerHTML += '&nbsp;'; 
                         });
 
-                        const submitBtn = document.createElement('button');
-                        submitBtn.type = 'submit';
-                        submitBtn.textContent = 'Отправить Заполненный Документ';
-                        submitBtn.style.width = 'auto';
-                        form.appendChild(submitBtn);
+                        if (isActiveSubmission) {
+                            const submitBtn = document.createElement('button');
+                            submitBtn.type = 'submit';
+                            submitBtn.textContent = (doc.status === 'На доработку' ? 'Отправить на Повторную Проверку' : 'Отправить Заполненный Документ');
+                            submitBtn.style.width = 'auto';
+                            form.appendChild(submitBtn);
+                        }
+
 
                         // *** ИСПРАВЛЕННАЯ ЛОГИКА: Валидация и сбор данных из DOM ***
                         form.addEventListener('submit', async (e) => {
@@ -629,10 +685,10 @@
                                     let currentValue;
                                     
                                     if (inputElement) {
-                                        // Если есть активное поле ввода (незаполненное поле студента)
+                                        // Если есть активное поле ввода (для заполнения/доработки)
                                         currentValue = inputElement.value.trim();
                                     } else {
-                                        // Если поля ввода нет (поле преподавателя или уже заполненное поле студента)
+                                        // Если поля ввода нет (поле преподавателя или уже заполненное поле студента - теперь span)
                                         currentValue = prefilledValue;
                                     }
                                     
@@ -641,10 +697,17 @@
                                         allRequiredFilled = false; // Обязательное поле студента не заполнено
                                     }
                                     
-                                    // 2. Сбор данных для отправки: включаем все, что имеет значение (для сохранения данных Преподавателя)
+                                    // 2. Сбор данных для отправки: включаем все, что имеет значение 
                                     if (currentValue) {
                                         studentSubmissionData[fieldName] = currentValue;
                                     }
+                                }
+                            });
+                            
+                            // 3. Сохраняем все предыдущие метаданные (review_reason, documentNumber, etc.), которые не являются полями шаблона
+                            Object.keys(prefilledData).forEach(key => {
+                                if (!studentSubmissionData[key]) {
+                                    studentSubmissionData[key] = prefilledData[key];
                                 }
                             });
                             
@@ -699,6 +762,52 @@
 
             } catch (error) {
                 displayMessage('Ошибка сети при отправке документа.', true);
+            }
+        }
+
+        // --- ЛОГИКА: ФУНКЦИЯ ОТПРАВКИ РЕШЕНИЯ ПО ДОКУМЕНТУ (ПРЕПОДАВАТЕЛЬ) ---
+        async function handleTeacherReview(docId, form, action) {
+            const token = localStorage.getItem('authToken');
+            
+            // Собираем данные из формы
+            const documentNumber = form.querySelector('input[name="documentNumber"]').value.trim();
+            const documentDate = form.querySelector('input[name="documentDate"]').value.trim();
+            const reason = form.querySelector('textarea[name="reason"]').value.trim();
+            
+            let requestBody = { action: action };
+
+            if (action === 'APPROVE') {
+                if (!documentNumber || !documentDate) {
+                    displayMessage('Для одобрения необходимо ввести номер документа и дату.', true);
+                    return;
+                }
+                requestBody.documentNumber = documentNumber;
+                requestBody.documentDate = documentDate;
+            } else if (action === 'REJECT') {
+                requestBody.reason = reason;
+            }
+
+            try {
+                const response = await fetch(`${API_URL}/documents/review/${docId}`, {
+                    method: 'PUT',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}` 
+                    },
+                    body: JSON.stringify(requestBody) 
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.success) {
+                    displayMessage(data.message, false);
+                    fetchTeacherDocuments(); // Обновить список
+                } else {
+                    displayMessage(data.message || 'Ошибка при обработке документа.', true); 
+                }
+
+            } catch (error) {
+                displayMessage('Ошибка сети при отправке решения по документу.', true);
             }
         }
 
