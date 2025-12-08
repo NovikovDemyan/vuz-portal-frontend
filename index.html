@@ -76,7 +76,10 @@
 </div>
 
 <script>
-    const API_URL = 'https://vuz-auth-api.onrender.com/api'; 
+    // ИСПРАВЛЕНИЕ: Разделение URL на корень (для Auth) и API (для Документов)
+    const BASE_URL = 'https://vuz-auth-api.onrender.com';
+    const DOCS_API_URL = `${BASE_URL}/api`; 
+    
     let currentUser = null;
     let currentDocumentId = null;
 
@@ -118,7 +121,8 @@
         const password = document.getElementById('login-password').value;
 
         try {
-            const response = await fetch(`${API_URL}/login`, {
+            // ИСПРАВЛЕНИЕ: Используем BASE_URL, чтобы избежать 404
+            const response = await fetch(`${BASE_URL}/login`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ email, password }),
@@ -145,7 +149,8 @@
         const role = document.getElementById('reg-role').value;
 
         try {
-            const response = await fetch(`${API_URL}/register`, {
+            // ИСПРАВЛЕНИЕ: Используем BASE_URL, чтобы избежать 404
+            const response = await fetch(`${BASE_URL}/register`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ email, password, role, full_name: fullName }),
@@ -220,7 +225,8 @@
         panel.innerHTML += '<h3>Мои Задания</h3>';
         
         try {
-            const response = await fetch(`${API_URL}/api/documents`, {
+            // ИСПОЛЬЗУЕМ DOCS_API_URL
+            const response = await fetch(`${DOCS_API_URL}/documents`, {
                 headers: { 'Authorization': `Bearer ${getToken()}` },
             });
             const data = await response.json();
@@ -252,24 +258,20 @@
 
     // --- ЛОГИКА ЗАПОЛНЕНИЯ ДОКУМЕНТА (КЛЮЧЕВАЯ ФУНКЦИЯ) ---
 
-    // Вспомогательная функция для безопасного извлечения значения из заполненного текста
+    // НОВАЯ ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ для извлечения заполненного значения
     function extractFieldValue(fieldName, templateContent, currentContent) {
-        // Мы ищем значение между тем, что предшествует маркеру, и тем, что следует за ним.
-        // ЭТОТ МЕТОД ОЧЕНЬ СЛОЖНЫЙ И НЕОПТИМАЛЬНЫЙ ДЛЯ PRODUCTION!
-        // В идеале, заполненные данные должны храниться в JSON, но для текущей текстовой модели:
-        
-        // 1. Находим все маркеры и их окружающий текст в шаблоне
+        // Находим все маркеры и их окружающий текст в шаблоне
         const templateParts = templateContent.split(/\{\{.*?\}\}/g);
         const markers = [...templateContent.matchAll(/\{\{(.*?)\}\}/g)].map(m => m[1].trim());
 
         const targetMarkerIndex = markers.findIndex(m => m === fieldName);
         if (targetMarkerIndex === -1) return '';
 
-        // 2. Определяем левый и правый ограничители
+        // Определяем левый и правый ограничители
         const leftBoundary = templateParts[targetMarkerIndex];
         const rightBoundary = templateParts[targetMarkerIndex + 1];
 
-        // 3. Используем регулярное выражение для извлечения значения
+        // Используем регулярное выражение для извлечения значения между границами
         // Экранируем спецсимволы и заменяем переносы строки на \s*
         const escapedLeft = leftBoundary.replace(/([.*+?^=!:${}()|[\]\/\\])/g,"\\$1").replace(/\n/g, '\\s*');
         const escapedRight = rightBoundary.replace(/([.*+?^=!:${}()|[\]\/\\])/g,"\\$1").replace(/\n/g, '\\s*');
@@ -277,7 +279,7 @@
         // Поиск значения между границами. Используем (.*?) для нежадного поиска.
         const regexString = `${escapedLeft}(.*?)${escapedRight}`;
         try {
-            const contentRegex = new RegExp(regexString, 's'); // 's' flag для . совпадения с \n
+            const contentRegex = new RegExp(regexString, 's'); // 's' флаг для . совпадения с \n
             const match = currentContent.match(contentRegex);
             
             if (match && match[1] !== undefined) {
@@ -290,7 +292,7 @@
         
         return '';
     }
-
+    
     async function showDocumentFillingInterface(docId, docTitle, docStatus) {
         document.getElementById('role-panel').style.display = 'none';
         const container = document.getElementById('filling-interface-container');
@@ -307,7 +309,8 @@
         clearMessages();
 
         try {
-            const response = await fetch(`${API_URL}/api/documents/${docId}`, {
+            // ИСПОЛЬЗУЕМ DOCS_API_URL
+            const response = await fetch(`${DOCS_API_URL}/documents/${docId}`, {
                 headers: { 'Authorization': `Bearer ${getToken()}` },
             });
             const data = await response.json();
@@ -323,12 +326,13 @@
                 let htmlOutput = '';
                 let lastIndex = 0;
 
+                // ИСПОЛЬЗУЕМ template для нахождения полей
                 while ((match = regex.exec(template)) !== null) {
                     const fieldName = match[1].trim(); 
                     const marker = match[0]; 
                     const textBefore = template.substring(lastIndex, match.index);
                     
-                    // Извлекаем предыдущее значение (если оно есть)
+                    // ИСПОЛЬЗУЕМ extractFieldValue для получения заполненного значения
                     const extractedValue = extractFieldValue(fieldName, template, current);
 
                     // Добавляем текст до маркера
@@ -381,7 +385,7 @@
         const inputFields = editor.querySelectorAll('input[data-marker]');
         
         // 1. Получаем исходный шаблон
-        const docResponse = await fetch(`${API_URL}/api/documents/${currentDocumentId}`, {
+        const docResponse = await fetch(`${DOCS_API_URL}/documents/${currentDocumentId}`, {
             headers: { 'Authorization': `Bearer ${getToken()}` },
         });
         const docData = await docResponse.json();
@@ -409,7 +413,8 @@
         const newContent = contentToUpdate;
 
         try {
-            const response = await fetch(`${API_URL}/api/documents/${currentDocumentId}`, {
+            // ИСПОЛЬЗУЕМ DOCS_API_URL
+            const response = await fetch(`${DOCS_API_URL}/documents/${currentDocumentId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` },
                 body: JSON.stringify({ content: newContent, status }),
@@ -431,7 +436,6 @@
     }
 
     // --- ПАНЕЛЬ ПРЕПОДАВАТЕЛЯ/КУРАТОРА ---
-    // (createDocument и renderTeacherPanel без изменений)
 
     async function renderTeacherPanel(panel) {
         panel.innerHTML += '<h3>Управление Заданиями</h3>';
@@ -449,7 +453,8 @@
         // Список отправленных заданий
         panel.innerHTML += '<h4>Отправленные задания</h4>';
         try {
-            const response = await fetch(`${API_URL}/api/documents`, {
+            // ИСПОЛЬЗУЕМ DOCS_API_URL
+            const response = await fetch(`${DOCS_API_URL}/documents`, {
                 headers: { 'Authorization': `Bearer ${getToken()}` },
             });
             const data = await response.json();
@@ -466,7 +471,7 @@
                             <span>${doc.title} (Кому: ${doc.targetStudentEmail})</span>
                             <span class="status-${doc.status}">Статус: ${doc.status}</span>
                         `;
-                        // Преподаватель может посмотреть заполненный документ
+                        // Преподаватель может посмотреть заполненный документ, но не редактировать
                         item.onclick = () => viewCompletedDocument(doc.id, doc.title, doc.status, doc.targetStudentEmail);
                         list.appendChild(item);
                     });
@@ -492,7 +497,8 @@
         }
 
         try {
-            const response = await fetch(`${API_URL}/api/documents/create`, {
+            // ИСПОЛЬЗУЕМ DOCS_API_URL
+            const response = await fetch(`${DOCS_API_URL}/documents/create`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` },
                 body: JSON.stringify({ title, templateContent, targetStudentEmail }),
@@ -524,13 +530,14 @@
         const editor = document.getElementById('document-content-editor');
         editor.innerHTML = 'Загрузка...';
 
-        // СКРЫТЬ кнопки сохранения для преподавателя
+        // Скрыть кнопки сохранения для преподавателя
         document.getElementById('save-draft-btn').style.display = 'none';
         document.getElementById('submit-btn').style.display = 'none';
         clearMessages();
 
         try {
-            const response = await fetch(`${API_URL}/api/documents/${docId}`, {
+            // ИСПОЛЬЗУЕМ DOCS_API_URL
+            const response = await fetch(`${DOCS_API_URL}/documents/${docId}`, {
                 headers: { 'Authorization': `Bearer ${getToken()}` },
             });
             const data = await response.json();
@@ -538,17 +545,16 @@
             if (data.success) {
                 const doc = data.document;
                 // Преподаватель видит текущее заполненное содержимое
-                const content = doc.currentContent || doc.templateContent; // Если нет заполненного, показать шаблон
+                const content = doc.currentContent; 
                 
                 // Просто отображаем текст, заменяя переносы строки.
-                // NOTE: white-space: pre-wrap; в CSS нужен, чтобы сохранить переносы из базы.
                 editor.innerHTML = `
                     <p><strong>Текущий статус:</strong> <span class="status-${docStatus}">${docStatus}</span></p>
                     <div style="border: 1px dashed #333; padding: 15px; white-space: pre-wrap;">${content}</div>
                 `;
                 
                 if (docStatus !== 'completed') {
-                    showMessage('error', 'Студент еще не завершил заполнение этого документа (Статус: ' + docStatus + ').');
+                    showMessage('error', 'Студент еще не завершил заполнение этого документа.');
                 } else {
                     showMessage('success', 'Документ заполнен студентом и готов к проверке.');
                 }
@@ -569,7 +575,8 @@
         const token = getToken();
         if (token) {
             try {
-                const response = await fetch(`${API_URL}/profile`, {
+                // ИСПОЛЬЗУЕМ BASE_URL
+                const response = await fetch(`${BASE_URL}/profile`, {
                     headers: { 'Authorization': `Bearer ${token}` },
                 });
                 const data = await response.json();
