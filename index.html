@@ -139,7 +139,7 @@
         const studentPanel = document.getElementById('student-panel');
         const showStudentDocsBtn = document.getElementById('show-student-docs-btn');
         const studentDocsList = document.getElementById('student-docs-list');
-        // Элементы Куратора (НОВЫЕ)
+        // Элементы Куратора
         const showCuratorDocsBtn = document.getElementById('show-curator-docs-btn');
         const curatorDocsList = document.getElementById('curator-docs-list');
         
@@ -231,7 +231,7 @@
 
                     if (data.userRole === 'Куратор') {
                          curatorPanel.classList.remove('hidden');
-                         fetchCuratorDocuments(); // Автозагрузка документов
+                         fetchCuratorDocuments(); 
                     } else if (data.userRole === 'Преподаватель') {
                          teacherPanel.classList.remove('hidden');
                     } else if (data.userRole === 'Студент') {
@@ -253,7 +253,7 @@
             }
         }
 
-        // --- ЛОГИКА: ПРОСМОТР ЗАПОЛНЕННЫХ ДОКУМЕНТОВ (КУРАТОР) (НОВАЯ) ---
+        // --- ЛОГИКА: ПРОСМОТР ЗАПОЛНЕННЫХ ДОКУМЕНТОВ (КУРАТОР) (ОБНОВЛЕНО) ---
         async function fetchCuratorDocuments() {
             curatorDocsList.innerHTML = 'Загрузка заполненных документов...';
             const token = localStorage.getItem('authToken');
@@ -275,15 +275,16 @@
                     let html = '<table><thead><tr><th>ID</th><th>Заголовок</th><th>Студент</th><th>Преподаватель</th><th>Дата Отправки</th><th>Действия</th></tr></thead><tbody>';
                     
                     data.documents.forEach(doc => {
-                        const submittedDataPreview = Object.keys(doc.submitted_data || {}).length > 0 ? 
-                            Object.values(doc.submitted_data).join('; ').substring(0, 50) + '...' : 'Нет данных';
+                        // Безопасная обработка имен, если они NULL
+                        const studentName = doc.student_name || 'НЕДОСТУПНО';
+                        const teacherName = doc.teacher_name || 'НЕДОСТУПНО';
                             
                         html += `
                             <tr>
                                 <td>${doc.id}</td>
                                 <td>${doc.title}</td>
-                                <td>${doc.student_name} (${doc.student_email})</td>
-                                <td>${doc.teacher_name}</td>
+                                <td>${studentName} (${doc.student_email || 'Email неизвестен'})</td>
+                                <td>${teacherName}</td>
                                 <td>${new Date(doc.created_at).toLocaleDateString('ru-RU')}</td>
                                 <td>
                                     <button style="width: auto;" onclick="downloadDocument(${doc.id}, '${doc.title.replace(/'/g, "\\'")}')">Скачать TXT</button>
@@ -307,7 +308,7 @@
             }
         }
 
-        // --- ЛОГИКА: СКАЧИВАНИЕ ДОКУМЕНТА (НОВАЯ) ---
+        // --- ЛОГИКА: СКАЧИВАНИЕ ДОКУМЕНТА ---
         function downloadDocument(docId, title) {
             const token = localStorage.getItem('authToken');
             
@@ -320,7 +321,10 @@
             .then(response => {
                 if (!response.ok) {
                     // Если ошибка, пытаемся прочитать сообщение из JSON
-                    return response.json().then(data => { throw new Error(data.message || 'Ошибка загрузки файла'); });
+                    return response.json().then(data => { 
+                        // data.message будет содержать сообщение из 404 или 500 ответа
+                        throw new Error(data.message || 'Ошибка загрузки файла'); 
+                    });
                 }
                 // Получаем ответ как Blob (двоичные данные)
                 return response.blob(); 
@@ -344,7 +348,6 @@
                 displayMessage(`Ошибка скачивания документа: ${error.message}`, true);
             });
         }
-
 
         // --- ЛОГИКА: ФУНКЦИЯ ПРОСМОТРА ДОКУМЕНТОВ (СТУДЕНТ) ---
         async function fetchStudentDocuments() {
@@ -432,6 +435,7 @@
             }
         }
 
+
         // --- ЛОГИКА: ФУНКЦИЯ ОТПРАВКИ ЗАПОЛНЕННОГО ДОКУМЕНТА (СТУДЕНТ) ---
         async function submitDocument(docId, filledData) {
             const token = localStorage.getItem('authToken');
@@ -450,7 +454,7 @@
 
                 if (response.ok && data.success) {
                     displayMessage(data.message, false);
-                    fetchStudentDocuments(); // Обновляем список, чтобы документ исчез
+                    fetchStudentDocuments(); 
                 } else {
                     displayMessage(data.message || 'Ошибка отправки документа.', true); 
                 }
@@ -459,6 +463,8 @@
                 displayMessage('Ошибка сети при отправке документа.', true);
             }
         }
+
+        // --- Остальные обработчики (без изменений) ---
 
         // Логика регистрации
         registerForm.addEventListener('submit', async (e) => {
@@ -571,7 +577,7 @@
         showRegisterBtn.addEventListener('click', () => showForm('register'));
         showUsersBtn.addEventListener('click', fetchUsers); 
         showStudentDocsBtn.addEventListener('click', fetchStudentDocuments); 
-        showCuratorDocsBtn.addEventListener('click', fetchCuratorDocuments); // НОВЫЙ ОБРАБОТЧИК
+        showCuratorDocsBtn.addEventListener('click', fetchCuratorDocuments); 
 
         // Проверяем статус при загрузке страницы
         checkAuth();
