@@ -9,6 +9,7 @@
         .container { max-width: 900px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
         h1 { text-align: center; color: #333; }
         input[type="text"], input[type="email"], input[type="password"], select { width: 100%; padding: 10px; margin: 8px 0; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        textarea { width: 100%; padding: 10px; margin: 8px 0; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; font-family: monospace;}
         button { background-color: #007bff; color: white; padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; width: 100%; margin-top: 10px; font-size: 16px; }
         button:hover { background-color: #0056b3; }
         #message { margin-top: 20px; padding: 10px; border-radius: 4px; }
@@ -19,10 +20,22 @@
         .tabs { display: flex; justify-content: space-around; margin-bottom: 20px; }
         .tab-button { background: none; border: none; padding: 10px; cursor: pointer; font-size: 16px; flex-grow: 1; }
         .tab-button.active { border-bottom: 2px solid #007bff; font-weight: bold; color: #007bff; }
+        
+        /* Стили для панелей ролей */
         #curator-panel { border: 1px solid #007bff; padding: 15px; margin-top: 20px; border-radius: 6px; background-color: #e6f0ff; }
         #curator-panel h3 { color: #007bff; text-align: center; }
+        #teacher-panel, #student-panel { border: 1px solid #28a745; padding: 15px; margin-top: 20px; border-radius: 6px; background-color: #e6fff0; }
+        #teacher-panel h3, #student-panel h3 { color: #28a745; text-align: center; }
+
         #users-table-container table { width: 100%; border-collapse: collapse; margin-top: 15px; background: white;}
         #users-table-container th, #users-table-container td { border: 1px solid #ddd; padding: 8px; text-align: left; font-size: 0.8em; word-break: break-all;}
+
+        /* Стили для карточек документов студента */
+        .document-card { border: 1px solid #ccc; padding: 10px; margin-bottom: 15px; border-radius: 6px; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+        .document-card h4 { margin-top: 0; color: #28a745;}
+        .document-card input[type="text"] { margin-bottom: 5px; width: auto; display: inline-block; padding: 5px; }
+        .document-card button { width: auto; margin-left: 10px; margin-top: 5px; padding: 8px 12px; }
+        .document-form p { margin: 0; padding: 0; line-height: 2.2;}
     </style>
 </head>
 <body>
@@ -70,6 +83,37 @@
             <div id="users-table-container"></div>
         </div>
 
+        <div id="teacher-panel" class="hidden">
+            <h3>Панель Преподавателя (Создание Документа)</h3>
+            <form id="document-create-form">
+                <input type="text" id="doc-title" placeholder="Название документа (Например: Заявление на отпуск)" required>
+                <input type="email" id="doc-student-email" placeholder="Email студента (Студент должен существовать)" required>
+                <textarea id="doc-template" rows="8" placeholder="Вставьте JSON-шаблон документа. Поля для заполнения обозначаются как: {ИмяПоля}" required>
+{
+    "parts": [
+        {"type": "text", "content": "Я, Студент "},
+        {"type": "input", "name": "Фамилия_Имя"},
+        {"type": "text", "content": ", прошу предоставить мне отпуск с "},
+        {"type": "input", "name": "Дата_Начала"},
+        {"type": "text", "content": " по "},
+        {"type": "input", "name": "Дата_Окончания"},
+        {"type": "text", "content": ". Основание:"},
+        {"type": "input", "name": "Основание"},
+        {"type": "text", "content": "."}
+    ]
+}
+                </textarea>
+                <button type="submit">Отправить Документ Студенту</button>
+            </form>
+        </div>
+
+        <div id="student-panel" class="hidden">
+            <h3>Документы, ожидающие заполнения</h3>
+            <button id="show-student-docs-btn">Обновить Список Документов</button>
+            <div id="student-docs-list"></div>
+        </div>
+
+
         <button id="logout-button" class="hidden">Выйти из системы</button>
 
         <div id="message" class="hidden"></div>
@@ -93,6 +137,12 @@
         const roleUpdateForm = document.getElementById('role-update-form');
         const showUsersBtn = document.getElementById('show-users-btn');
         const usersTableContainer = document.getElementById('users-table-container');
+        // Новые элементы
+        const teacherPanel = document.getElementById('teacher-panel');
+        const documentCreateForm = document.getElementById('document-create-form');
+        const studentPanel = document.getElementById('student-panel');
+        const showStudentDocsBtn = document.getElementById('show-student-docs-btn');
+        const studentDocsList = document.getElementById('student-docs-list');
 
 
         function displayMessage(text, isError = false) {
@@ -118,7 +168,10 @@
             }
             messageDiv.classList.add('hidden');
             curatorPanel.classList.add('hidden'); 
-            usersTableContainer.innerHTML = ''; // Очищаем таблицу пользователей
+            teacherPanel.classList.add('hidden');
+            studentPanel.classList.add('hidden');
+            usersTableContainer.innerHTML = ''; 
+            studentDocsList.innerHTML = '';
         }
 
         async function checkAuth() {
@@ -129,6 +182,8 @@
                 authArea.classList.remove('hidden');
                 logoutButton.classList.add('hidden');
                 curatorPanel.classList.add('hidden');
+                teacherPanel.classList.add('hidden');
+                studentPanel.classList.add('hidden');
                 showForm('login');
                 return;
             }
@@ -150,11 +205,19 @@
                     authArea.classList.add('hidden'); 
                     logoutButton.classList.remove('hidden');
 
-                    // ПОКАЗАТЬ ПАНЕЛЬ КУРАТОРА
+                    // Скрыть все панели перед показом нужной
+                    curatorPanel.classList.add('hidden');
+                    teacherPanel.classList.add('hidden');
+                    studentPanel.classList.add('hidden');
+
+                    // ПОКАЗАТЬ ПАНЕЛИ ПО РОЛИ
                     if (data.userRole === 'Куратор') {
                          curatorPanel.classList.remove('hidden');
-                    } else {
-                        curatorPanel.classList.add('hidden');
+                    } else if (data.userRole === 'Преподаватель') {
+                         teacherPanel.classList.remove('hidden');
+                    } else if (data.userRole === 'Студент') {
+                         studentPanel.classList.remove('hidden');
+                         fetchStudentDocuments(); // Загрузка документов студента при входе
                     }
 
                 } else if (response.status === 403 || response.status === 401) {
@@ -171,7 +234,7 @@
             }
         }
 
-        // --- ЛОГИКА: ФУНКЦИЯ ПРОСМОТРА ВСЕХ ПОЛЬЗОВАТЕЛЕЙ ---
+        // --- ЛОГИКА: ФУНКЦИЯ ПРОСМОТРА ВСЕХ ПОЛЬЗОВАТЕЛЕЙ (КУРАТОР) ---
         async function fetchUsers() {
             usersTableContainer.innerHTML = 'Загрузка...';
             const token = localStorage.getItem('authToken');
@@ -185,12 +248,9 @@
                 const data = await response.json();
 
                 if (response.ok && data.success) {
-                    // Рендеринг таблицы
                     let html = '<table><thead><tr><th>ID</th><th>Имя</th><th>Email</th><th>Роль</th><th>Хеш Пароля (hashedpassword)</th></tr></thead><tbody>';
                     
                     data.users.forEach(user => {
-                        // user.hashedpassword используется, так как это имя поля, возвращаемое 'pg' 
-                        // для столбца в нижнем регистре из PostgreSQL
                         html += `
                             <tr>
                                 <td>${user.id}</td>
@@ -214,6 +274,166 @@
             } catch (error) {
                 usersTableContainer.innerHTML = '';
                 displayMessage('Ошибка сети при загрузке данных пользователей.', true);
+            }
+        }
+
+
+        // --- НОВАЯ ЛОГИКА: ФУНКЦИЯ СОЗДАНИЯ ДОКУМЕНТА (ПРЕПОДАВАТЕЛЬ) ---
+        documentCreateForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const title = document.getElementById('doc-title').value;
+            const studentEmail = document.getElementById('doc-student-email').value;
+            const templateString = document.getElementById('doc-template').value;
+            const token = localStorage.getItem('authToken');
+
+            try {
+                // Парсинг шаблона
+                const template = JSON.parse(templateString);
+                
+                const response = await fetch(`${API_URL}/documents/create`, {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}` 
+                    },
+                    body: JSON.stringify({ title, studentEmail, template })
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.success) {
+                    displayMessage(data.message, false); 
+                    // Не сбрасываем шаблон, чтобы можно было отправить его другому студенту
+                    document.getElementById('doc-title').value = ''; 
+                    document.getElementById('doc-student-email').value = ''; 
+                } else {
+                    displayMessage(data.message || 'Ошибка создания документа.', true);
+                }
+
+            } catch (error) {
+                if (error instanceof SyntaxError) {
+                    displayMessage('Ошибка: Неверный JSON-формат шаблона документа.', true);
+                } else {
+                    console.error('Ошибка сети при создании документа:', error);
+                    displayMessage('Ошибка сети при создании документа.', true);
+                }
+            }
+        });
+
+
+        // --- НОВАЯ ЛОГИКА: ФУНКЦИЯ ПРОСМОТРА ДОКУМЕНТОВ (СТУДЕНТ) ---
+        async function fetchStudentDocuments() {
+            studentDocsList.innerHTML = 'Загрузка документов...';
+            const token = localStorage.getItem('authToken');
+
+            try {
+                const response = await fetch(`${API_URL}/documents/student`, {
+                    method: 'GET',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.success) {
+                    if (data.documents.length === 0) {
+                        studentDocsList.innerHTML = '<p>Нет документов, ожидающих заполнения.</p>';
+                        return;
+                    }
+
+                    // Рендеринг карточек документов
+                    studentDocsList.innerHTML = '';
+                    data.documents.forEach(doc => {
+                        const card = document.createElement('div');
+                        card.className = 'document-card';
+                        card.innerHTML = `<h4>${doc.title} (ID: ${doc.id})</h4>`;
+
+                        const form = document.createElement('form');
+                        form.dataset.docId = doc.id;
+                        form.className = 'document-form';
+                        
+                        const filledData = {};
+
+                        // Генерация формы на основе шаблона
+                        doc.template.parts.forEach(part => {
+                            if (part.type === 'text') {
+                                form.innerHTML += `<p style="display: inline;">${part.content}</p>`;
+                            } else if (part.type === 'input') {
+                                const input = document.createElement('input');
+                                input.type = 'text';
+                                input.name = part.name;
+                                input.placeholder = `[Введите данные: ${part.name}]`;
+                                input.required = true;
+                                
+                                // Добавление обработчика для сбора данных при вводе
+                                input.addEventListener('input', (e) => {
+                                    filledData[part.name] = e.target.value;
+                                });
+
+                                // Добавляем элемент ввода и перенос
+                                form.appendChild(input);
+                                form.innerHTML += '&nbsp;'; // Неразрывный пробел
+                            }
+                        });
+
+                        const submitBtn = document.createElement('button');
+                        submitBtn.type = 'submit';
+                        submitBtn.textContent = 'Отправить Заполненный Документ';
+                        submitBtn.style.width = 'auto';
+                        form.appendChild(submitBtn);
+
+                        // Логика отправки формы
+                        form.addEventListener('submit', async (e) => {
+                            e.preventDefault();
+                            // Проверяем, что все поля были заполнены (для required=true в HTML)
+                            if (form.checkValidity()) {
+                                await submitDocument(doc.id, filledData);
+                            } else {
+                                displayMessage('Пожалуйста, заполните все обязательные поля в документе.', true);
+                            }
+                        });
+
+                        card.appendChild(form);
+                        studentDocsList.appendChild(card);
+                    });
+
+                } else {
+                    studentDocsList.innerHTML = '';
+                    displayMessage(data.message || 'Ошибка загрузки документов студента.', true);
+                }
+
+            } catch (error) {
+                console.error('Ошибка сети при загрузке документов:', error);
+                studentDocsList.innerHTML = '';
+                displayMessage('Ошибка сети при загрузке данных пользователей.', true);
+            }
+        }
+
+
+        // --- НОВАЯ ЛОГИКА: ФУНКЦИЯ ОТПРАВКИ ЗАПОЛНЕННОГО ДОКУМЕНТА (СТУДЕНТ) ---
+        async function submitDocument(docId, filledData) {
+            const token = localStorage.getItem('authToken');
+
+            try {
+                const response = await fetch(`${API_URL}/documents/submit/${docId}`, {
+                    method: 'PUT',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}` 
+                    },
+                    body: JSON.stringify({ filledData: filledData })
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.success) {
+                    displayMessage(data.message, false);
+                    fetchStudentDocuments(); // Обновляем список, чтобы убрать заполненный документ
+                } else {
+                    displayMessage(data.message || 'Ошибка отправки документа.', true); 
+                }
+
+            } catch (error) {
+                displayMessage('Ошибка сети при отправке документа.', true);
             }
         }
 
@@ -328,6 +548,7 @@
         showLoginBtn.addEventListener('click', () => showForm('login'));
         showRegisterBtn.addEventListener('click', () => showForm('register'));
         showUsersBtn.addEventListener('click', fetchUsers); 
+        showStudentDocsBtn.addEventListener('click', fetchStudentDocuments); // Для Студента
 
         // Проверяем статус при загрузке страницы
         checkAuth();
