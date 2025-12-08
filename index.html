@@ -86,23 +86,14 @@
         <div id="teacher-panel" class="hidden">
             <h3>Панель Преподавателя (Создание Документа)</h3>
             <form id="document-create-form">
-                <input type="text" id="doc-title" placeholder="Название документа (Например: Заявление на отпуск)" required>
+                <label for="doc-template-name">Выберите шаблон документа:</label>
+                <select id="doc-template-name" required>
+                    <option value="" disabled selected>Выберите шаблон...</option>
+                </select>
+                
+                <input type="text" id="doc-title" placeholder="Название документа (опционально, по умолчанию: имя шаблона)">
                 <input type="email" id="doc-student-email" placeholder="Email студента (Студент должен существовать)" required>
-                <textarea id="doc-template" rows="8" placeholder="Вставьте JSON-шаблон документа. Поля для заполнения обозначаются как: {ИмяПоля}" required>
-{
-    "parts": [
-        {"type": "text", "content": "Я, Студент "},
-        {"type": "input", "name": "Фамилия_Имя"},
-        {"type": "text", "content": ", прошу предоставить мне отпуск с "},
-        {"type": "input", "name": "Дата_Начала"},
-        {"type": "text", "content": " по "},
-        {"type": "input", "name": "Дата_Окончания"},
-        {"type": "text", "content": ". Основание:"},
-        {"type": "input", "name": "Основание"},
-        {"type": "text", "content": "."}
-    ]
-}
-                </textarea>
+                
                 <button type="submit">Отправить Документ Студенту</button>
             </form>
         </div>
@@ -123,7 +114,7 @@
         // !!! ВАЖНО: ЗАМЕНИТЕ ЭТОТ АДРЕС НА ВАШ АДРЕС RENDER !!!
         const API_URL = 'https://vuz-auth-api.onrender.com/api';
 
-        // Элементы (ДОПОЛНЕНО)
+        // Элементы
         const authArea = document.getElementById('auth-area');
         const loginForm = document.getElementById('login-form');
         const registerForm = document.getElementById('register-form');
@@ -143,6 +134,27 @@
         const studentPanel = document.getElementById('student-panel');
         const showStudentDocsBtn = document.getElementById('show-student-docs-btn');
         const studentDocsList = document.getElementById('student-docs-list');
+        
+        // --- НОВЫЙ СПИСОК ШАБЛОНОВ ДЛЯ ФРОНТЕНДА ---
+        const availableTemplates = [
+            'Заявление на Отпуск', 
+            'Уведомление о Задолженности',
+            'Запрос на Смену Руководителя'
+        ];
+        const docTemplateNameSelect = document.getElementById('doc-template-name');
+        
+        // Функция для заполнения выпадающего списка
+        function populateTemplateSelect() {
+            availableTemplates.forEach(templateName => {
+                const option = document.createElement('option');
+                option.value = templateName;
+                option.textContent = templateName;
+                docTemplateNameSelect.appendChild(option);
+            });
+        }
+        
+        // Вызываем функцию при загрузке страницы, чтобы заполнить список
+        populateTemplateSelect(); 
 
 
         function displayMessage(text, isError = false) {
@@ -168,10 +180,10 @@
             }
             messageDiv.classList.add('hidden');
             curatorPanel.classList.add('hidden'); 
-            teacherPanel.classList.add('hidden'); // Скрыть
-            studentPanel.classList.add('hidden'); // Скрыть
+            teacherPanel.classList.add('hidden'); 
+            studentPanel.classList.add('hidden'); 
             usersTableContainer.innerHTML = ''; 
-            studentDocsList.innerHTML = ''; // Очищаем список документов
+            studentDocsList.innerHTML = ''; 
         }
 
         async function checkAuth() {
@@ -205,19 +217,17 @@
                     authArea.classList.add('hidden'); 
                     logoutButton.classList.remove('hidden');
 
-                    // Скрыть все панели перед показом нужной
                     curatorPanel.classList.add('hidden');
                     teacherPanel.classList.add('hidden');
                     studentPanel.classList.add('hidden');
 
-                    // ПОКАЗАТЬ ПАНЕЛИ ПО РОЛИ
                     if (data.userRole === 'Куратор') {
                          curatorPanel.classList.remove('hidden');
                     } else if (data.userRole === 'Преподаватель') {
                          teacherPanel.classList.remove('hidden');
                     } else if (data.userRole === 'Студент') {
                          studentPanel.classList.remove('hidden');
-                         fetchStudentDocuments(); // Загрузка документов студента при входе
+                         fetchStudentDocuments(); 
                     }
 
                 } else if (response.status === 403 || response.status === 401) {
@@ -278,45 +288,39 @@
         }
 
 
-        // --- НОВАЯ ЛОГИКА: ФУНКЦИЯ СОЗДАНИЯ ДОКУМЕНТА (ПРЕПОДАВАТЕЛЬ) ---
+        // --- НОВАЯ ЛОГИКА: ФУНКЦИЯ СОЗДАНИЯ ДОКУМЕНТА (ПРЕПОДАВАТЕЛЬ) (ОБНОВЛЕНО) ---
         documentCreateForm.addEventListener('submit', async (e) => {
             e.preventDefault();
+            const templateName = docTemplateNameSelect.value; // Читаем имя шаблона
             const title = document.getElementById('doc-title').value;
             const studentEmail = document.getElementById('doc-student-email').value;
-            const templateString = document.getElementById('doc-template').value;
             const token = localStorage.getItem('authToken');
 
             try {
-                // Парсинг шаблона
-                const template = JSON.parse(templateString);
-                
+                // Отправляем имя шаблона
                 const response = await fetch(`${API_URL}/documents/create`, {
                     method: 'POST',
                     headers: { 
                         'Content-Type': 'application/json',
                         'Authorization': `Bearer ${token}` 
                     },
-                    body: JSON.stringify({ title, studentEmail, template })
+                    body: JSON.stringify({ templateName, studentEmail, title }) // Отправляем templateName
                 });
 
                 const data = await response.json();
 
                 if (response.ok && data.success) {
                     displayMessage(data.message, false); 
-                    // Не сбрасываем шаблон, чтобы можно было отправить его другому студенту
                     document.getElementById('doc-title').value = ''; 
                     document.getElementById('doc-student-email').value = ''; 
+                    docTemplateNameSelect.value = ''; // Сбрасываем выбор
                 } else {
                     displayMessage(data.message || 'Ошибка создания документа.', true);
                 }
 
             } catch (error) {
-                if (error instanceof SyntaxError) {
-                    displayMessage('Ошибка: Неверный JSON-формат шаблона документа.', true);
-                } else {
-                    console.error('Ошибка сети при создании документа:', error);
-                    displayMessage('Ошибка сети при создании документа.', true);
-                }
+                console.error('Ошибка сети при создании документа:', error);
+                displayMessage('Ошибка сети при создании документа.', true);
             }
         });
 
@@ -384,7 +388,6 @@
                         // Логика отправки формы
                         form.addEventListener('submit', async (e) => {
                             e.preventDefault();
-                            // Проверяем, что все поля были заполнены (для required=true в HTML)
                             if (form.checkValidity()) {
                                 await submitDocument(doc.id, filledData);
                             } else {
@@ -427,7 +430,7 @@
 
                 if (response.ok && data.success) {
                     displayMessage(data.message, false);
-                    fetchStudentDocuments(); // Обновляем список, чтобы убрать заполненный документ
+                    fetchStudentDocuments(); 
                 } else {
                     displayMessage(data.message || 'Ошибка отправки документа.', true); 
                 }
@@ -543,12 +546,12 @@
             }
         }
 
-        // Обработчики событий (ДОПОЛНЕНО)
+        // Обработчики событий
         logoutButton.addEventListener('click', () => logout(true));
         showLoginBtn.addEventListener('click', () => showForm('login'));
         showRegisterBtn.addEventListener('click', () => showForm('register'));
         showUsersBtn.addEventListener('click', fetchUsers); 
-        showStudentDocsBtn.addEventListener('click', fetchStudentDocuments); // Новый обработчик
+        showStudentDocsBtn.addEventListener('click', fetchStudentDocuments); 
 
         // Проверяем статус при загрузке страницы
         checkAuth();
