@@ -299,7 +299,7 @@
             }
         }
 
-        // --- ЛОГИКА: ФУНКЦИЯ ПРОСМОТРА ВСЕХ ПОЛЬЗОВАТЕЛЕЙ (КУРАТОР) (Без изменений) ---
+        // --- ЛОГИКА: ФУНКЦИЯ ПРОСМОТРА ВСЕХ ПОЛЬЗОВАТЕЛЕЙ (КУРАТОР) ---
         async function fetchUsers() {
             usersTableContainer.innerHTML = 'Загрузка...';
             const token = localStorage.getItem('authToken');
@@ -342,7 +342,7 @@
             }
         }
 
-        // --- ОБНОВЛЕННАЯ ЛОГИКА: ГЕНЕРАЦИЯ ФОРМЫ ДЛЯ ПРЕПОДАВАТЕЛЯ (Создание документа) ---
+        // --- ЛОГИКА: ГЕНЕРАЦИЯ ФОРМЫ ДЛЯ ПРЕПОДАВАТЕЛЯ (Создание документа) ---
         docTemplateNameSelect.addEventListener('change', () => {
             const templateName = docTemplateNameSelect.value;
             showTeacherForm(templateName);
@@ -364,30 +364,31 @@
             let documentDisplay = '<div style="border: 1px solid #ccc; padding: 15px; background: #fafafa; border-radius: 4px; line-height: 2.2;">';
 
             template.forEach(part => {
+                const partContainer = document.createElement('span');
+                partContainer.className = 'doc-part';
+                
                 if (part.type === 'text') {
-                    documentDisplay += `<span class="doc-part">${part.content}</span>&nbsp;`;
+                    partContainer.innerHTML = part.content;
                 } else if (part.type === 'input') {
                     if (part.role === 'Преподаватель') {
                         // Преподаватель может заполнять - активное поле
-                        documentDisplay += `
-                            <span class="doc-part">
-                                <input type="text" id="teacher-input-${part.name}" name="${part.name}" 
-                                       placeholder="Введите ${part.name} (Преподаватель)" 
-                                       style="border: 2px solid #007bff; width: auto; display: inline-block; padding: 5px; margin: 0;" required>
-                            </span>&nbsp;
+                        partContainer.innerHTML = `
+                            <input type="text" id="teacher-input-${part.name}" name="${part.name}" 
+                                   placeholder="Введите ${part.name} (Преподаватель)" 
+                                   style="border: 2px solid #007bff; width: auto; display: inline-block; padding: 5px; margin: 0;" required>
                         `;
                     } else if (part.role === 'Студент') {
-                        // Поле для студента - заглушка
-                        documentDisplay += `
-                            <span class="doc-part">
-                                <span style="border: 1px dashed gray; padding: 5px; background: #f0f0f0;">[Поле для Студента: ${part.name}]</span>
-                            </span>&nbsp;
+                        // Поле для студента - заглушка (не должно быть активным)
+                        partContainer.innerHTML = `
+                            <span style="border: 1px dashed gray; padding: 5px; background: #f0f0f0;">[Поле для Студента: ${part.name}]</span>
                         `;
                     }
                 }
+                
+                documentDisplay += partContainer.outerHTML + '&nbsp;';
             });
 
-            documentDisplay += '</div></div><br>';
+            documentDisplay += '</div><br>';
             formHTML += documentDisplay;
 
             formHTML += `<input type="text" id="doc-title" placeholder="Название документа (опционально, по умолчанию: имя шаблона)">`;
@@ -528,7 +529,7 @@
             }
         }
 
-        // --- ЛОГИКА: ФУНКЦИЯ ПРОСМОТРА ДОКУМЕНТОВ (СТУДЕНТ) (ОБНОВЛЕНО) ---
+        // --- ЛОГИКА: ФУНКЦИЯ ПРОСМОТРА ДОКУМЕНТОВ (СТУДЕНТ) (ИСПРАВЛЕНО) ---
         async function fetchStudentDocuments() {
             studentDocsList.innerHTML = 'Загрузка документов...';
             const token = localStorage.getItem('authToken');
@@ -572,6 +573,7 @@
 
                                 // 1. Если поле уже заполнено (преподавателем)
                                 if (isPrefilled && part.role === 'Преподаватель') {
+                                    // Показываем как заполненный неактивный текст
                                     partContainer.innerHTML = `<span class="prefilled" style="background-color: #e6f0ff;">${prefilledData[part.name]}</span>`;
                                 } 
                                 // 2. Если поле должно быть заполнено студентом
@@ -585,7 +587,7 @@
                                         input.type = 'text';
                                         input.name = part.name;
                                         input.placeholder = `[Ваш ввод: ${part.name}]`;
-                                        input.required = true; 
+                                        input.required = true; // Визуально помечаем как required
                                         
                                         input.addEventListener('input', (e) => {
                                             studentData[part.name] = e.target.value;
@@ -594,8 +596,8 @@
                                         partContainer.appendChild(input);
                                     }
                                     
-                                    // Дополнительно, если это поле студента, даже если оно уже заполнено (в prefilledData),
-                                    // мы должны включить его в studentData для полной отправки, чтобы не потерять уже заполненные данные.
+                                    // *** ФИКС БАГА №1: Добавляем в studentData данные, которые Студент уже заполнил ранее. ***
+                                    // Это нужно для корректной отправки и для корректной работы валидации
                                     if(isPrefilled) {
                                         studentData[part.name] = prefilledData[part.name];
                                     }
@@ -617,17 +619,21 @@
                         submitBtn.style.width = 'auto';
                         form.appendChild(submitBtn);
 
-                        // Логика отправки формы
+                        // *** ФИКС БАГА №2: Валидация перед отправкой ***
                         form.addEventListener('submit', async (e) => {
                             e.preventDefault();
-                            // Проверка, что все необходимые поля заполнены
+                            
+                            // Проверка, что все необходимые поля Студента заполнены (именно те, что были пусты до этого)
                             let allRequiredFilled = true;
-                            // Проверяем поля, которые должны были быть заполнены студентом, но не были заполнены ранее
-                            doc.template.parts.filter(p => p.type === 'input' && p.role === 'Студент' && (prefilledData[p.name] === undefined || prefilledData[p.name] === '')).forEach(p => {
-                                if (!studentData[p.name]) {
-                                     allRequiredFilled = false;
-                                }
-                            });
+                            // Фильтруем: только input, только для Студента, и только те, которые НЕ были заполнены в prefilledData.
+                            doc.template.parts
+                                .filter(p => p.type === 'input' && p.role === 'Студент' && (prefilledData[p.name] === undefined || prefilledData[p.name] === ''))
+                                .forEach(p => {
+                                    // Проверяем, что студент ввел значение в текущей сессии
+                                    if (!studentData[p.name]) { 
+                                         allRequiredFilled = false;
+                                    }
+                                });
 
 
                             if (allRequiredFilled) {
