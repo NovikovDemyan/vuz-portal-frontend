@@ -27,9 +27,8 @@
         #teacher-panel, #student-panel { border: 1px solid #28a745; padding: 15px; margin-top: 20px; border-radius: 6px; background-color: #e6fff0; }
         #teacher-panel h3, #student-panel h3 { color: #28a745; text-align: center; }
 
-        #users-table-container table, #curator-docs-list table { width: 100%; border-collapse: collapse; margin-top: 15px; background: white;}
-        #users-table-container th, #users-table-container td,
-        #curator-docs-list th, #curator-docs-list td { border: 1px solid #ddd; padding: 8px; text-align: left; font-size: 0.8em; word-break: break-all;}
+        #users-table-container table { width: 100%; border-collapse: collapse; margin-top: 15px; background: white;}
+        #users-table-container th, #users-table-container td { border: 1px solid #ddd; padding: 8px; text-align: left; font-size: 0.8em; word-break: break-all;}
 
         /* Стили для карточек документов студента */
         .document-card { border: 1px solid #ccc; padding: 10px; margin-bottom: 15px; border-radius: 6px; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
@@ -79,13 +78,9 @@
                 <button type="submit">Изменить Роль</button>
             </form>
 
-            <h3 style="margin-top: 30px;">Просмотр Пользователей (Dev-Mode)</h3>
+            <h3 style="margin-top: 30px;">Просмотр Данных (Dev-Mode)</h3>
             <button id="show-users-btn">Показать всех пользователей из БД</button>
             <div id="users-table-container"></div>
-
-            <h3 style="margin-top: 30px;">Заполненные Документы</h3>
-            <button id="show-curator-docs-btn">Обновить Список Заполненных Документов</button>
-            <div id="curator-docs-list"></div>
         </div>
 
         <div id="teacher-panel" class="hidden">
@@ -139,11 +134,8 @@
         const studentPanel = document.getElementById('student-panel');
         const showStudentDocsBtn = document.getElementById('show-student-docs-btn');
         const studentDocsList = document.getElementById('student-docs-list');
-        // Элементы Куратора
-        const showCuratorDocsBtn = document.getElementById('show-curator-docs-btn');
-        const curatorDocsList = document.getElementById('curator-docs-list');
         
-        // --- СПИСОК ШАБЛОНОВ ДЛЯ ФРОНТЕНДА ---
+        // --- НОВЫЙ СПИСОК ШАБЛОНОВ ДЛЯ ФРОНТЕНДА ---
         const availableTemplates = [
             'Заявление на Отпуск', 
             'Уведомление о Задолженности',
@@ -161,6 +153,7 @@
             });
         }
         
+        // Вызываем функцию при загрузке страницы, чтобы заполнить список
         populateTemplateSelect(); 
 
 
@@ -191,7 +184,6 @@
             studentPanel.classList.add('hidden'); 
             usersTableContainer.innerHTML = ''; 
             studentDocsList.innerHTML = ''; 
-            curatorDocsList.innerHTML = ''; // Очищаем список куратора
         }
 
         async function checkAuth() {
@@ -231,7 +223,6 @@
 
                     if (data.userRole === 'Куратор') {
                          curatorPanel.classList.remove('hidden');
-                         fetchCuratorDocuments(); 
                     } else if (data.userRole === 'Преподаватель') {
                          teacherPanel.classList.remove('hidden');
                     } else if (data.userRole === 'Студент') {
@@ -253,13 +244,13 @@
             }
         }
 
-        // --- ЛОГИКА: ПРОСМОТР ЗАПОЛНЕННЫХ ДОКУМЕНТОВ (КУРАТОР) (ОБНОВЛЕНО) ---
-        async function fetchCuratorDocuments() {
-            curatorDocsList.innerHTML = 'Загрузка заполненных документов...';
+        // --- ЛОГИКА: ФУНКЦИЯ ПРОСМОТРА ВСЕХ ПОЛЬЗОВАТЕЛЕЙ (КУРАТОР) ---
+        async function fetchUsers() {
+            usersTableContainer.innerHTML = 'Загрузка...';
             const token = localStorage.getItem('authToken');
 
             try {
-                const response = await fetch(`${API_URL}/documents/curator`, {
+                const response = await fetch(`${API_URL}/users`, {
                     method: 'GET',
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
@@ -267,89 +258,74 @@
                 const data = await response.json();
 
                 if (response.ok && data.success) {
-                    if (data.documents.length === 0) {
-                        curatorDocsList.innerHTML = '<p>Нет заполненных документов, ожидающих проверки.</p>';
-                        return;
-                    }
-
-                    let html = '<table><thead><tr><th>ID</th><th>Заголовок</th><th>Студент</th><th>Преподаватель</th><th>Дата Отправки</th><th>Действия</th></tr></thead><tbody>';
+                    let html = '<table><thead><tr><th>ID</th><th>Имя</th><th>Email</th><th>Роль</th><th>Хеш Пароля (hashedpassword)</th></tr></thead><tbody>';
                     
-                    data.documents.forEach(doc => {
-                        // Безопасная обработка имен, если они NULL
-                        const studentName = doc.student_name || 'НЕДОСТУПНО';
-                        const teacherName = doc.teacher_name || 'НЕДОСТУПНО';
-                            
+                    data.users.forEach(user => {
                         html += `
                             <tr>
-                                <td>${doc.id}</td>
-                                <td>${doc.title}</td>
-                                <td>${studentName} (${doc.student_email || 'Email неизвестен'})</td>
-                                <td>${teacherName}</td>
-                                <td>${new Date(doc.created_at).toLocaleDateString('ru-RU')}</td>
-                                <td>
-                                    <button style="width: auto;" onclick="downloadDocument(${doc.id}, '${doc.title.replace(/'/g, "\\'")}')">Скачать TXT</button>
-                                </td>
+                                <td>${user.id}</td>
+                                <td>${user.name}</td>
+                                <td>${user.email}</td>
+                                <td>${user.role}</td>
+                                <td>${user.hashedpassword.substring(0, 30)}...</td> 
                             </tr>
                         `;
                     });
                     
                     html += '</tbody></table>';
-                    curatorDocsList.innerHTML = html;
-                    displayMessage(`Загружено ${data.documents.length} заполненных документов.`, false);
+                    usersTableContainer.innerHTML = html;
+                    displayMessage(`Загружено ${data.users.length} пользователей.`, false);
 
                 } else {
-                    curatorDocsList.innerHTML = '';
-                    displayMessage(data.message || 'Ошибка загрузки заполненных документов.', true);
+                    usersTableContainer.innerHTML = '';
+                    displayMessage(data.message || 'Ошибка загрузки списка пользователей. Возможно, у вас нет прав.', true);
                 }
 
             } catch (error) {
-                curatorDocsList.innerHTML = '';
-                displayMessage('Ошибка сети при загрузке документов куратора.', true);
+                usersTableContainer.innerHTML = '';
+                displayMessage('Ошибка сети при загрузке данных пользователей.', true);
             }
         }
 
-        // --- ЛОГИКА: СКАЧИВАНИЕ ДОКУМЕНТА ---
-        function downloadDocument(docId, title) {
+
+        // --- НОВАЯ ЛОГИКА: ФУНКЦИЯ СОЗДАНИЯ ДОКУМЕНТА (ПРЕПОДАВАТЕЛЬ) (ОБНОВЛЕНО) ---
+        documentCreateForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const templateName = docTemplateNameSelect.value; // Читаем имя шаблона
+            const title = document.getElementById('doc-title').value;
+            const studentEmail = document.getElementById('doc-student-email').value;
             const token = localStorage.getItem('authToken');
-            
-            const downloadUrl = `${API_URL}/documents/download/${docId}`;
 
-            fetch(downloadUrl, {
-                method: 'GET',
-                headers: { 'Authorization': `Bearer ${token}` }
-            })
-            .then(response => {
-                if (!response.ok) {
-                    // Если ошибка, пытаемся прочитать сообщение из JSON
-                    return response.json().then(data => { 
-                        // data.message будет содержать сообщение из 404 или 500 ответа
-                        throw new Error(data.message || 'Ошибка загрузки файла'); 
-                    });
+            try {
+                // Отправляем имя шаблона
+                const response = await fetch(`${API_URL}/documents/create`, {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}` 
+                    },
+                    body: JSON.stringify({ templateName, studentEmail, title }) // Отправляем templateName
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.success) {
+                    displayMessage(data.message, false); 
+                    document.getElementById('doc-title').value = ''; 
+                    document.getElementById('doc-student-email').value = ''; 
+                    docTemplateNameSelect.value = ''; // Сбрасываем выбор
+                } else {
+                    displayMessage(data.message || 'Ошибка создания документа.', true);
                 }
-                // Получаем ответ как Blob (двоичные данные)
-                return response.blob(); 
-            })
-            .then(blob => {
-                // Создаем временный URL для скачивания
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.style.display = 'none';
-                a.href = url;
-                // Устанавливаем имя файла для сохранения
-                a.download = `${title}_ID${docId}.txt`;
-                document.body.appendChild(a);
-                a.click();
-                // Очищаем временный URL
-                window.URL.revokeObjectURL(url);
-                displayMessage(`Скачивание документа "${title}" начато.`, false);
-            })
-            .catch(error => {
-                console.error("Ошибка скачивания:", error);
-                displayMessage(`Ошибка скачивания документа: ${error.message}`, true);
-            });
-        }
 
-        // --- ЛОГИКА: ФУНКЦИЯ ПРОСМОТРА ДОКУМЕНТОВ (СТУДЕНТ) ---
+            } catch (error) {
+                console.error('Ошибка сети при создании документа:', error);
+                displayMessage('Ошибка сети при создании документа.', true);
+            }
+        });
+
+
+        // --- НОВАЯ ЛОГИКА: ФУНКЦИЯ ПРОСМОТРА ДОКУМЕНТОВ (СТУДЕНТ) ---
         async function fetchStudentDocuments() {
             studentDocsList.innerHTML = 'Загрузка документов...';
             const token = localStorage.getItem('authToken');
@@ -436,7 +412,7 @@
         }
 
 
-        // --- ЛОГИКА: ФУНКЦИЯ ОТПРАВКИ ЗАПОЛНЕННОГО ДОКУМЕНТА (СТУДЕНТ) ---
+        // --- НОВАЯ ЛОГИКА: ФУНКЦИЯ ОТПРАВКИ ЗАПОЛНЕННОГО ДОКУМЕНТА (СТУДЕНТ) ---
         async function submitDocument(docId, filledData) {
             const token = localStorage.getItem('authToken');
 
@@ -464,7 +440,6 @@
             }
         }
 
-        // --- Остальные обработчики (без изменений) ---
 
         // Логика регистрации
         registerForm.addEventListener('submit', async (e) => {
@@ -577,7 +552,6 @@
         showRegisterBtn.addEventListener('click', () => showForm('register'));
         showUsersBtn.addEventListener('click', fetchUsers); 
         showStudentDocsBtn.addEventListener('click', fetchStudentDocuments); 
-        showCuratorDocsBtn.addEventListener('click', fetchCuratorDocuments); 
 
         // Проверяем статус при загрузке страницы
         checkAuth();
