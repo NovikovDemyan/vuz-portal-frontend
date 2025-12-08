@@ -37,8 +37,8 @@
             </div>
 
             <form id="login-form" class="auth-form">
-                <input type="email" id="login-email" placeholder="Корпоративный Email (curator@vuz.ru / student@vuz.ru)" required>
-                <input type="password" id="login-password" placeholder="Пароль (123456)" required>
+                <input type="email" id="login-email" placeholder="Корпоративный Email (curator@vuz.ru, Пароль: 123456)" required>
+                <input type="password" id="login-password" placeholder="Пароль" required>
                 <button type="submit">Войти</button>
             </form>
 
@@ -71,7 +71,7 @@
 
     <script>
         // !!! ВАЖНО: ЗАМЕНИТЕ ЭТОТ АДРЕС ПОСЛЕ РАЗВЕРТЫВАНИЯ БЭКЕНДА !!!
-        const API_URL = 'https://vuz-auth-api.onrender.com/api';
+        const API_URL = 'https://vuz-auth-api.onrender.com/api'; 
 
         // Элементы
         const authArea = document.getElementById('auth-area');
@@ -94,7 +94,6 @@
         }
 
         function showForm(formId) {
-            // ... (логика переключения форм)
             showLoginBtn.classList.remove('active');
             showRegisterBtn.classList.remove('active');
             loginForm.classList.add('hidden');
@@ -110,7 +109,7 @@
                 greetingTitle.textContent = "Создание Учетной Записи";
             }
             messageDiv.classList.add('hidden');
-            curatorPanel.classList.add('hidden'); // Скрываем панель при выходе/смене формы 
+            curatorPanel.classList.add('hidden'); 
         }
 
         async function checkAuth() {
@@ -142,7 +141,7 @@
                     authArea.classList.add('hidden'); 
                     logoutButton.classList.remove('hidden');
 
-                    // !!! НОВАЯ ЛОГИКА: ПОКАЗАТЬ ПАНЕЛЬ КУРАТОРА !!!
+                    // ПОКАЗАТЬ ПАНЕЛЬ КУРАТОРА
                     if (data.userRole === 'Куратор') {
                          curatorPanel.classList.remove('hidden');
                     } else {
@@ -163,7 +162,7 @@
             }
         }
 
-        // Логика регистрации остается прежней...
+        // Логика регистрации
         registerForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             const name = document.getElementById('register-name').value;
@@ -180,7 +179,7 @@
                 const data = await response.json();
 
                 if (response.ok && data.success) {
-                    displayMessage(data.message, false); // Сообщение теперь включает "Вы Студент."
+                    displayMessage(data.message, false); 
                     registerForm.reset();
                     showForm('login');
 
@@ -194,7 +193,7 @@
         });
 
 
-        // Логика входа остается прежней, но проверяет роль
+        // Логика входа
         loginForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             const email = document.getElementById('login-email').value;
@@ -211,7 +210,6 @@
 
                 if (response.ok && data.success) {
                     localStorage.setItem('authToken', data.token); 
-                    // Роль теперь возвращается в ответе, но мы используем checkAuth для полной проверки
                     displayMessage(`Успешный вход! Ваша роль: ${data.role}`, false); 
                     checkAuth(); 
 
@@ -224,7 +222,7 @@
             }
         });
 
-        // !!! НОВАЯ ЛОГИКА: ФОРМА ИЗМЕНЕНИЯ РОЛИ !!!
+        // ЛОГИКА: ФОРМА ИЗМЕНЕНИЯ РОЛИ КУРАТОРОМ
         roleUpdateForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             const email = document.getElementById('target-email').value;
@@ -252,7 +250,8 @@
                     displayMessage(data.message, false);
                     roleUpdateForm.reset();
                 } else {
-                    displayMessage(data.message || 'Ошибка изменения роли.', true);
+                    // Это может быть "Доступ запрещен. Требуется роль Куратор."
+                    displayMessage(data.message || 'Ошибка изменения роли.', true); 
                 }
 
             } catch (error) {
@@ -269,10 +268,12 @@
             }
         }
 
+        // Обработчики событий
         logoutButton.addEventListener('click', () => logout(true));
         showLoginBtn.addEventListener('click', () => showForm('login'));
         showRegisterBtn.addEventListener('click', () => showForm('register'));
 
+        // Проверяем статус при загрузке страницы
         checkAuth();
     </script>
 </body>
