@@ -76,7 +76,7 @@
 </div>
 
 <script>
-    // ИСПРАВЛЕНИЕ: Разделение URL на корень (для Auth) и API (для Документов)
+    // ИСПРАВЛЕНО: Разделение URL на корень (для Auth) и API (для Документов)
     const BASE_URL = 'https://vuz-auth-api.onrender.com';
     const DOCS_API_URL = `${BASE_URL}/api`; 
     
@@ -121,7 +121,7 @@
         const password = document.getElementById('login-password').value;
 
         try {
-            // ИСПРАВЛЕНИЕ: Используем BASE_URL, чтобы избежать 404
+            // Используем BASE_URL
             const response = await fetch(`${BASE_URL}/login`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -149,7 +149,7 @@
         const role = document.getElementById('reg-role').value;
 
         try {
-            // ИСПРАВЛЕНИЕ: Используем BASE_URL, чтобы избежать 404
+            // Используем BASE_URL
             const response = await fetch(`${BASE_URL}/register`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -258,7 +258,7 @@
 
     // --- ЛОГИКА ЗАПОЛНЕНИЯ ДОКУМЕНТА (КЛЮЧЕВАЯ ФУНКЦИЯ) ---
 
-    // НОВАЯ ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ для извлечения заполненного значения
+    // ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ для извлечения заполненного значения
     function extractFieldValue(fieldName, templateContent, currentContent) {
         // Находим все маркеры и их окружающий текст в шаблоне
         const templateParts = templateContent.split(/\{\{.*?\}\}/g);
