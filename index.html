@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Портал ВУЗа</title>
+    <style>
+        /* ... (Стили, как в предыдущем ответе) ... */
+        body { font-family: sans-serif; padding: 20px; background-color: #f4f4f9; }
+        .container { max-width: 400px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        h1 { text-align: center; color: #333; }
+        input[type="text"], input[type="email"], input[type="password"] { width: 100%; padding: 10px; margin: 8px 0; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        button { background-color: #007bff; /* Синий цвет для ВУЗа */ color: white; padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; width: 100%; margin-top: 10px; font-size: 16px; }
+        button:hover { background-color: #0056b3; }
+        #message { margin-top: 20px; padding: 10px; border-radius: 4px; }
+        .error { background-color: #f2dede; color: #a94442; border: 1px solid #ebccd1; }
+        .success { background-color: #dff0d8; color: #3c763d; border: 1px solid #d6e9c6; }
+        #auth-status { text-align: center; font-size: 1.2em; font-weight: bold; margin-bottom: 20px; }
+        .hidden { display: none; }
+        .tabs { display: flex; justify-content: space-around; margin-bottom: 20px; }
+        .tab-button { background: none; border: none; padding: 10px; cursor: pointer; font-size: 16px; flex-grow: 1; }
+        .tab-button.active { border-bottom: 2px solid #007bff; font-weight: bold; color: #007bff; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1 id="greeting-title">Портал ВУЗа</h1>
+        
+        <div id="auth-status" class="hidden"></div>
+        
+        <div id="auth-area">
+            <div class="tabs">
+                <button class="tab-button active" id="show-login-btn">Вход</button>
+                <button class="tab-button" id="show-register-btn">Регистрация</button>
+            </div>
+
+            <form id="login-form" class="auth-form">
+                <input type="email" id="login-email" placeholder="Корпоративный Email" required>
+                <input type="password" id="login-password" placeholder="Пароль" required>
+                <button type="submit">Войти</button>
+            </form>
+
+            <form id="register-form" class="auth-form hidden">
+                <input type="text" id="register-name" placeholder="Фамилия Имя" required>
+                <input type="email" id="register-email" placeholder="Email для ВУЗа" required>
+                <input type="password" id="register-password" placeholder="Пароль (мин. 6 символов)" required>
+                <button type="submit">Зарегистрироваться</button>
+            </form>
+        </div>
+        
+        <button id="logout-button" class="hidden">Выйти из системы</button>
+
+        <div id="message" class="hidden"></div>
+    </div>
+
+    <script>
+        // !!! ВАЖНО: ЗАМЕНИТЕ ЭТОТ АДРЕС ПОСЛЕ РАЗВЕРТЫВАНИЯ БЭКЕНДА !!!
+        // Например: 'https://vuz-auth-api.onrender.com/api'
+        const API_URL = 'http://localhost:3000/api'; 
+
+        const authArea = document.getElementById('auth-area');
+        const loginForm = document.getElementById('login-form');
+        const registerForm = document.getElementById('register-form');
+        const logoutButton = document.getElementById('logout-button');
+        const authStatus = document.getElementById('auth-status');
+        const messageDiv = document.getElementById('message');
+        const greetingTitle = document.getElementById('greeting-title');
+        const showLoginBtn = document.getElementById('show-login-btn');
+        const showRegisterBtn = document.getElementById('show-register-btn');
+
+        function displayMessage(text, isError = false) {
+            messageDiv.textContent = text;
+            messageDiv.className = isError ? 'error' : 'success';
+            messageDiv.classList.remove('hidden');
+        }
+
+        function showForm(formId) {
+            // ... (логика переключения форм)
+            showLoginBtn.classList.remove('active');
+            showRegisterBtn.classList.remove('active');
+            loginForm.classList.add('hidden');
+            registerForm.classList.add('hidden');
+            
+            if (formId === 'login') {
+                showLoginBtn.classList.add('active');
+                loginForm.classList.remove('hidden');
+                greetingTitle.textContent = "Вход в Портал";
+            } else {
+                showRegisterBtn.classList.add('active');
+                registerForm.classList.remove('hidden');
+                greetingTitle.textContent = "Создание Учетной Записи";
+            }
+            messageDiv.classList.add('hidden'); 
+        }
+
+        async function checkAuth() {
+            const token = localStorage.getItem('authToken');
+            
+            if (!token) {
+                authStatus.classList.add('hidden');
+                authArea.classList.remove('hidden');
+                logoutButton.classList.add('hidden');
+                showForm('login');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_URL}/greeting`, {
+                    method: 'GET',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    
+                    greetingTitle.textContent = data.message;
+                    authStatus.textContent = `Добро пожаловать в Портал ВУЗа!`;
+                    authStatus.className = 'success';
+                    authStatus.classList.remove('hidden');
+
+                    authArea.classList.add('hidden'); 
+                    logoutButton.classList.remove('hidden');
+
+                } else if (response.status === 403 || response.status === 401) {
+                    displayMessage('Ваша сессия истекла. Пожалуйста, войдите снова.', true);
+                    logout(false); 
+                } else {
+                    displayMessage('Ошибка при проверке аутентификации.', true);
+                    logout(false);
+                }
+            } catch (error) {
+                console.error("Ошибка сети:", error);
+                displayMessage('Не удалось подключиться к серверу API.', true);
+                logout(false);
+            }
+        }
+
+        registerForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const name = document.getElementById('register-name').value;
+            const email = document.getElementById('register-email').value;
+            const password = document.getElementById('register-password').value;
+
+            try {
+                const response = await fetch(`${API_URL}/register`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, email, password })
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.success) {
+                    displayMessage('Регистрация успешна! Теперь выполните вход.', false);
+                    registerForm.reset();
+                    showForm('login');
+
+                } else {
+                    displayMessage(data.message || 'Ошибка регистрации.', true);
+                }
+
+            } catch (error) {
+                displayMessage('Ошибка сети при регистрации.', true);
+            }
+        });
+
+
+        loginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('login-email').value;
+            const password = document.getElementById('login-password').value;
+
+            try {
+                const response = await fetch(`${API_URL}/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password })
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.success) {
+                    localStorage.setItem('authToken', data.token); 
+                    displayMessage('Успешный вход!', false);
+                    checkAuth(); 
+
+                } else {
+                    displayMessage(data.message || 'Проверьте Email и пароль.', true);
+                }
+
+            } catch (error) {
+                displayMessage('Ошибка сети при входе.', true);
+            }
+        });
+
+        function logout(showMessage = true) {
+            localStorage.removeItem('authToken'); 
+            checkAuth(); 
+            if (showMessage) {
+                 displayMessage('Выход выполнен.', false);
+            }
+        }
+
+        logoutButton.addEventListener('click', () => logout(true));
+        showLoginBtn.addEventListener('click', () => showForm('login'));
+        showRegisterBtn.addEventListener('click', () => showForm('register'));
+
+        checkAuth();
+    </script>
+</body>
+</html>
