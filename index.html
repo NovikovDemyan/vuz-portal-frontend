@@ -30,14 +30,19 @@
         #users-table-container table { width: 100%; border-collapse: collapse; margin-top: 15px; background: white;}
         #users-table-container th, #users-table-container td { border: 1px solid #ddd; padding: 8px; text-align: left; font-size: 0.8em; word-break: break-all;}
 
-        /* Стили для карточек документов студента */
+        /* Стили для карточек документов */
         .document-card { border: 1px solid #ccc; padding: 10px; margin-bottom: 15px; border-radius: 6px; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
         .document-card h4 { margin-top: 0; color: #28a745;}
         .document-card .doc-part { display: inline-block; padding: 0; margin: 0; line-height: 2.2; }
         .document-card input[type="text"] { margin-bottom: 5px; width: auto; display: inline-block; padding: 5px; }
         .document-card button { width: auto; margin-left: 10px; margin-top: 5px; padding: 8px 12px; }
-        .document-card .prefilled { background-color: #e0f0e0; font-weight: bold; padding: 5px 8px; border-radius: 4px; border: 1px dashed #28a745;}
+        /* Стиль для заполненных данных */
+        .document-card .prefilled { font-weight: bold; padding: 5px 8px; border-radius: 4px; border: 1px dashed gray; background-color: #e0f0e0;} 
         .teacher-form-fields { margin-top: 15px; border-top: 1px dashed #28a745; padding-top: 10px; }
+
+        /* Цвета для преподавателя (различать роли) */
+        .teacher-card .prefilled { background-color: #e6f0ff; color: #004085; } /* Данные Преподавателя */
+        .teacher-card .prefilled.student-data { background-color: #fff3e6; color: #856404; } /* Данные Студента */
     </style>
 </head>
 <body>
@@ -86,8 +91,9 @@
         </div>
 
         <div id="teacher-panel" class="hidden">
-            <h3>Панель Преподавателя (Создание Документа)</h3>
+            <h3>Панель Преподавателя (Создание и Просмотр)</h3>
             
+            <h4>1. Создание нового документа</h4>
             <label for="doc-template-name">Выберите шаблон документа:</label>
             <select id="doc-template-name" required>
                 <option value="" disabled selected>Выберите шаблон...</option>
@@ -97,6 +103,14 @@
             
             <div id="teacher-document-creation-area">
                 </div>
+
+            <hr style="margin: 30px 0;">
+
+            <h4>2. Ваши созданные документы</h4>
+            <button id="show-teacher-docs-btn">Обновить Список Документов</button>
+            <div id="teacher-docs-list">
+                <p>Нажмите "Обновить Список Документов", чтобы увидеть статус и заполненные данные.</p>
+            </div>
             
         </div>
 
@@ -137,6 +151,9 @@
         const showStudentDocsBtn = document.getElementById('show-student-docs-btn');
         const studentDocsList = document.getElementById('student-docs-list');
         const teacherCreationArea = document.getElementById('teacher-document-creation-area');
+        // Элементы для просмотра преподавателем
+        const showTeacherDocsBtn = document.getElementById('show-teacher-docs-btn');
+        const teacherDocsList = document.getElementById('teacher-docs-list');
         
         // --- СПИСОК ШАБЛОНОВ (Должен соответствовать server.js для корректной генерации формы) ---
         const templateParts = {
@@ -186,7 +203,6 @@
             });
         }
         
-        // Вызываем функцию при загрузке страницы, чтобы заполнить список
         populateTemplateSelect(); 
 
 
@@ -197,7 +213,6 @@
         }
 
         function showForm(formId) {
-            // ... (логика скрытия/показа форм без изменений)
             showLoginBtn.classList.remove('active');
             showRegisterBtn.classList.remove('active');
             loginForm.classList.add('hidden');
@@ -218,11 +233,11 @@
             studentPanel.classList.add('hidden'); 
             usersTableContainer.innerHTML = ''; 
             studentDocsList.innerHTML = ''; 
-            teacherCreationArea.innerHTML = ''; // Очистка области создания документа
+            teacherCreationArea.innerHTML = ''; 
+            teacherDocsList.innerHTML = '<p>Нажмите "Обновить Список Документов", чтобы увидеть статус и заполненные данные.</p>'; // Сброс списка препода
         }
 
         async function checkAuth() {
-            // ... (логика проверки авторизации без изменений)
             const token = localStorage.getItem('authToken');
             
             if (!token) {
@@ -256,13 +271,14 @@
                     curatorPanel.classList.add('hidden');
                     teacherPanel.classList.add('hidden');
                     studentPanel.classList.add('hidden');
-                    teacherCreationArea.innerHTML = ''; // Очистка области создания документа
-                    docTemplateNameSelect.value = ''; // Сброс выбора
+                    teacherCreationArea.innerHTML = ''; 
+                    docTemplateNameSelect.value = ''; 
 
                     if (data.userRole === 'Куратор') {
                          curatorPanel.classList.remove('hidden');
                     } else if (data.userRole === 'Преподаватель') {
                          teacherPanel.classList.remove('hidden');
+                         fetchTeacherDocuments(); // <-- Вызов для загрузки списка при входе
                     } else if (data.userRole === 'Студент') {
                          studentPanel.classList.remove('hidden');
                          fetchStudentDocuments(); 
@@ -284,7 +300,6 @@
 
         // --- ЛОГИКА: ФУНКЦИЯ ПРОСМОТРА ВСЕХ ПОЛЬЗОВАТЕЛЕЙ (КУРАТОР) (Без изменений) ---
         async function fetchUsers() {
-            // ... (реализация fetchUsers без изменений)
             usersTableContainer.innerHTML = 'Загрузка...';
             const token = localStorage.getItem('authToken');
 
@@ -326,7 +341,7 @@
             }
         }
 
-        // --- НОВАЯ ЛОГИКА: ГЕНЕРАЦИЯ ФОРМЫ ДЛЯ ПРЕПОДАВАТЕЛЯ ---
+        // --- ЛОГИКА: ГЕНЕРАЦИЯ ФОРМЫ ДЛЯ ПРЕПОДАВАТЕЛЯ (Инициализация) ---
         docTemplateNameSelect.addEventListener('change', () => {
             const templateName = docTemplateNameSelect.value;
             showTeacherForm(templateName);
@@ -340,7 +355,6 @@
             const template = templateParts[templateName];
             if (!template) return;
 
-            // Находим поля, которые должен заполнить преподаватель
             const teacherParts = template.filter(part => part.type === 'input' && part.role === 'Преподаватель');
             
             if (teacherParts.length === 0) {
@@ -363,11 +377,10 @@
             
             teacherCreationArea.innerHTML = formHTML;
             
-            // Назначаем обработчик события отправки новой форме
             document.getElementById('document-create-form').addEventListener('submit', handleTeacherFormSubmit);
         }
 
-        // --- НОВАЯ ЛОГИКА: ОБРАБОТЧИК ОТПРАВКИ ФОРМЫ ПРЕПОДАВАТЕЛЯ ---
+        // --- ЛОГИКА: ОБРАБОТЧИК ОТПРАВКИ ФОРМЫ ПРЕПОДАВАТЕЛЯ (Создание документа) ---
         async function handleTeacherFormSubmit(e) {
             e.preventDefault();
             
@@ -381,14 +394,12 @@
             const inputs = form.querySelectorAll('input[type="text"]');
             
             inputs.forEach(input => {
-                 // Убедимся, что собираем только те данные, которые соответствуют именам полей в шаблоне
                 if(input.name) { 
                     teacherData[input.name] = input.value;
                 }
             });
 
             try {
-                // Отправляем имя шаблона и заполненные данные преподавателя (teacherData)
                 const response = await fetch(`${API_URL}/documents/create`, {
                     method: 'POST',
                     headers: { 
@@ -403,8 +414,9 @@
                 if (response.ok && data.success) {
                     displayMessage(data.message, false); 
                     document.getElementById('doc-student-email').value = ''; 
-                    docTemplateNameSelect.value = ''; // Сбрасываем выбор
-                    teacherCreationArea.innerHTML = ''; // Очищаем форму
+                    docTemplateNameSelect.value = ''; 
+                    teacherCreationArea.innerHTML = ''; 
+                    fetchTeacherDocuments(); // Обновить список после создания
                 } else {
                     displayMessage(data.message || 'Ошибка создания документа.', true);
                 }
@@ -414,9 +426,89 @@
                 displayMessage('Ошибка сети при создании документа.', true);
             }
         }
+        
+        // --- НОВАЯ ЛОГИКА: ФУНКЦИЯ ПРОСМОТРА ВСЕХ ДОКУМЕНТОВ (ПРЕПОДАВАТЕЛЬ) ---
+        async function fetchTeacherDocuments() {
+            teacherDocsList.innerHTML = 'Загрузка документов...';
+            const token = localStorage.getItem('authToken');
 
+            try {
+                const response = await fetch(`${API_URL}/documents/teacher`, {
+                    method: 'GET',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
 
-        // --- НОВАЯ ЛОГИКА: ФУНКЦИЯ ПРОСМОТРА ДОКУМЕНТОВ (СТУДЕНТ) (ОБНОВЛЕНО) ---
+                const data = await response.json();
+
+                if (response.ok && data.success) {
+                    if (data.documents.length === 0) {
+                        teacherDocsList.innerHTML = '<p>Вы не создали ни одного документа.</p>';
+                        return;
+                    }
+
+                    teacherDocsList.innerHTML = '';
+                    
+                    data.documents.forEach(doc => {
+                        const card = document.createElement('div');
+                        card.className = 'document-card teacher-card';
+                        
+                        // Статус, заголовок и получатель
+                        card.innerHTML = `
+                            <h4>${doc.title} (Студент: ${doc.student_email})</h4>
+                            <p>Статус: <strong>${doc.status}</strong> (ID: ${doc.id})</p>
+                            <div class="document-content-${doc.id}"></div>
+                        `;
+
+                        const contentDiv = card.querySelector(`.document-content-${doc.id}`);
+                        const prefilledData = doc.submitted_data || {};
+                        
+                        // Генерация полного документа для просмотра
+                        doc.template.parts.forEach(part => {
+                            const partContainer = document.createElement('span');
+                            partContainer.className = 'doc-part';
+
+                            if (part.type === 'text') {
+                                partContainer.innerHTML = part.content;
+                            } else if (part.type === 'input') {
+                                // Получаем значение, если оно есть
+                                const fieldValue = prefilledData[part.name] !== undefined 
+                                                    ? prefilledData[part.name] 
+                                                    : '';
+
+                                // Определяем класс в зависимости от роли заполняющего
+                                let displayClass = 'prefilled';
+                                if (part.role === 'Преподаватель') {
+                                    displayClass = 'prefilled';
+                                } else if (part.role === 'Студент') {
+                                    displayClass = 'prefilled student-data'; 
+                                }
+                                
+                                // Текст, если поле пустое
+                                const displayValue = fieldValue || `[НЕ ЗАПОЛНЕН ${part.role.toUpperCase()}]`;
+
+                                partContainer.innerHTML = `<span class="${displayClass}">${displayValue}</span>`;
+                            }
+
+                            contentDiv.appendChild(partContainer);
+                            contentDiv.innerHTML += '&nbsp;'; 
+                        });
+                        
+                        teacherDocsList.appendChild(card);
+                    });
+
+                } else {
+                    teacherDocsList.innerHTML = '';
+                    displayMessage(data.message || 'Ошибка загрузки ваших документов.', true);
+                }
+
+            } catch (error) {
+                console.error('Ошибка сети при загрузке документов преподавателя:', error);
+                teacherDocsList.innerHTML = '';
+                displayMessage('Ошибка сети при загрузке данных документов.', true);
+            }
+        }
+
+        // --- ЛОГИКА: ФУНКЦИЯ ПРОСМОТРА ДОКУМЕНТОВ (СТУДЕНТ) (ОБНОВЛЕНО) ---
         async function fetchStudentDocuments() {
             studentDocsList.innerHTML = 'Загрузка документов...';
             const token = localStorage.getItem('authToken');
@@ -456,17 +548,24 @@
                             if (part.type === 'text') {
                                 partContainer.innerHTML = part.content;
                             } else if (part.type === 'input') {
-                                // Если поле уже заполнено преподавателем
-                                if (prefilledData[part.name] !== undefined) {
+                                const isPrefilled = prefilledData[part.name] !== undefined && prefilledData[part.name] !== '';
+
+                                // 1. Если поле уже заполнено (преподавателем или частично студентом)
+                                if (isPrefilled) {
+                                    // Отображаем как заполненное поле
                                     partContainer.innerHTML = `<span class="prefilled">${prefilledData[part.name]}</span>`;
+                                    // Если это поле студента, сохраняем его в данных для отправки, чтобы не потерять, если студент отправит форму без изменений
+                                    if (part.role === 'Студент') {
+                                        studentData[part.name] = prefilledData[part.name];
+                                    }
                                 } 
-                                // Если поле должно быть заполнено студентом И оно еще не заполнено
-                                else if (part.role === 'Студент' && prefilledData[part.name] === undefined) {
+                                // 2. Если поле должно быть заполнено студентом И оно еще не заполнено
+                                else if (part.role === 'Студент') {
                                     const input = document.createElement('input');
                                     input.type = 'text';
                                     input.name = part.name;
                                     input.placeholder = `[Ваш ввод: ${part.name}]`;
-                                    input.required = true; // Студент должен заполнить свои поля
+                                    input.required = true; 
                                     
                                     // Добавление обработчика для сбора данных при вводе
                                     input.addEventListener('input', (e) => {
@@ -475,9 +574,9 @@
 
                                     partContainer.appendChild(input);
                                 }
-                                // Если поле должно было быть заполнено преподавателем, но пропущено
-                                else if (part.role === 'Преподаватель' && prefilledData[part.name] === undefined) {
-                                    partContainer.innerHTML = `<span style="color: red;">[ОЖИДАЕТСЯ ВВОД ПРЕПОДАВАТЕЛЯ]</span>`;
+                                // 3. Если поле должно было быть заполнено преподавателем, но пропущено
+                                else if (part.role === 'Преподаватель' && !isPrefilled) {
+                                    partContainer.innerHTML = `<span style="color: red; border: 1px solid red; padding: 5px;">[ОЖИДАЕТСЯ ВВОД ПРЕПОДАВАТЕЛЯ]</span>`;
                                 }
                             }
 
@@ -518,19 +617,18 @@
         }
 
 
-        // --- НОВАЯ ЛОГИКА: ФУНКЦИЯ ОТПРАВКИ ЗАПОЛНЕННОГО ДОКУМЕНТА (СТУДЕНТ) ---
+        // --- ЛОГИКА: ФУНКЦИЯ ОТПРАВКИ ЗАПОЛНЕННОГО ДОКУМЕНТА (СТУДЕНТ) ---
         async function submitStudentDocument(docId, studentData) {
             const token = localStorage.getItem('authToken');
 
             try {
-                // Отправляем studentData
                 const response = await fetch(`${API_URL}/documents/submit/${docId}`, {
                     method: 'PUT',
                     headers: { 
                         'Content-Type': 'application/json',
                         'Authorization': `Bearer ${token}` 
                     },
-                    body: JSON.stringify({ studentData: studentData }) // Изменили имя поля на studentData
+                    body: JSON.stringify({ studentData: studentData }) 
                 });
 
                 const data = await response.json();
@@ -548,7 +646,7 @@
         }
 
 
-        // ... (остальная логика: Регистрация, Вход, Изменение Роли, Выход - без изменений)
+        // ... (Регистрация, Вход, Изменение Роли, Выход - без изменений)
         registerForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             const name = document.getElementById('register-name').value;
@@ -657,6 +755,7 @@
         showRegisterBtn.addEventListener('click', () => showForm('register'));
         showUsersBtn.addEventListener('click', fetchUsers); 
         showStudentDocsBtn.addEventListener('click', fetchStudentDocuments); 
+        showTeacherDocsBtn.addEventListener('click', fetchTeacherDocuments); // <-- Новый обработчик
 
         // Проверяем статус при загрузке страницы
         checkAuth();
