@@ -558,7 +558,7 @@
                         form.dataset.docId = doc.id;
                         form.className = 'document-form';
                         
-                        const studentData = {};
+                        // studentData больше не используется для сбора данных, только для API (мы его заполним в обработчике submit)
                         const prefilledData = doc.submitted_data || {};
 
                         // Генерация формы на основе шаблона
@@ -579,29 +579,21 @@
                                 // 2. Если поле должно быть заполнено студентом
                                 else if (part.role === 'Студент') {
                                     if (isPrefilled) {
-                                        // Если студент уже начал заполнять, показываем его ввод как заполненный
+                                        // Если студент уже начал заполнять, показываем его ввод как заполненный, но неактивный
                                         partContainer.innerHTML = `<span class="prefilled">${prefilledData[part.name]}</span>`;
                                     } else {
-                                        // Иначе, показываем поле ввода
+                                        // Иначе, показываем поле ввода (активное)
                                         const input = document.createElement('input');
                                         input.type = 'text';
                                         input.name = part.name;
                                         input.placeholder = `[Ваш ввод: ${part.name}]`;
-                                        input.required = true; // Визуально помечаем как required
+                                        input.required = true; 
                                         
-                                        input.addEventListener('input', (e) => {
-                                            studentData[part.name] = e.target.value;
-                                        });
-
+                                        // *** УДАЛЕНО: input.addEventListener('input', ...) ***
+                                        // Мы будем читать значение из DOM прямо перед отправкой
+                                        
                                         partContainer.appendChild(input);
                                     }
-                                    
-                                    // *** ФИКС БАГА №1: Добавляем в studentData данные, которые Студент уже заполнил ранее. ***
-                                    // Это нужно для корректной отправки и для корректной работы валидации
-                                    if(isPrefilled) {
-                                        studentData[part.name] = prefilledData[part.name];
-                                    }
-
                                 }
                                 // 3. Если поле должно было быть заполнено преподавателем, но пропущено
                                 else if (part.role === 'Преподаватель' && !isPrefilled) {
@@ -619,25 +611,47 @@
                         submitBtn.style.width = 'auto';
                         form.appendChild(submitBtn);
 
-                        // *** ФИКС БАГА №2: Валидация перед отправкой ***
+                        // *** ИСПРАВЛЕННАЯ ЛОГИКА: Валидация и сбор данных из DOM ***
                         form.addEventListener('submit', async (e) => {
                             e.preventDefault();
                             
-                            // Проверка, что все необходимые поля Студента заполнены (именно те, что были пусты до этого)
                             let allRequiredFilled = true;
-                            // Фильтруем: только input, только для Студента, и только те, которые НЕ были заполнены в prefilledData.
-                            doc.template.parts
-                                .filter(p => p.type === 'input' && p.role === 'Студент' && (prefilledData[p.name] === undefined || prefilledData[p.name] === ''))
-                                .forEach(p => {
-                                    // Проверяем, что студент ввел значение в текущей сессии
-                                    if (!studentData[p.name]) { 
-                                         allRequiredFilled = false;
+                            // Объект для отправки. Собирает все данные, за которые отвечает студент (новые и старые)
+                            const finalStudentData = {}; 
+                            
+                            doc.template.parts.forEach(part => {
+                                if (part.type === 'input' && part.role === 'Студент') {
+                                    const fieldName = part.name;
+                                    const prefilledValue = prefilledData[fieldName]; 
+                                    
+                                    // Поиск активного поля ввода в DOM
+                                    const inputElement = form.querySelector(`input[name="${fieldName}"]`); 
+                                    
+                                    if (inputElement) {
+                                        // Случай 1: Активное поле ввода (должно быть заполнено)
+                                        const newValue = inputElement.value.trim(); 
+                                        
+                                        if (newValue === '') {
+                                            allRequiredFilled = false;
+                                        }
+                                        
+                                        finalStudentData[fieldName] = newValue;
+
+                                    } else if (prefilledValue !== undefined && prefilledValue !== '') {
+                                        // Случай 2: Неактивный заполненный SPAN (ранее заполнен студентом)
+                                        finalStudentData[fieldName] = prefilledValue;
+                                        
+                                    } else {
+                                        // Случай 3: Поле Студента пусто, и нет активного поля (ошибка)
+                                        allRequiredFilled = false;
                                     }
-                                });
+                                }
+                            });
 
 
                             if (allRequiredFilled) {
-                                await submitStudentDocument(doc.id, studentData);
+                                // Отправляем объект с данными студента
+                                await submitStudentDocument(doc.id, finalStudentData);
                             } else {
                                 displayMessage('Пожалуйста, заполните все обязательные поля в документе.', true);
                             }
