@@ -3,278 +3,546 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Портал ВУЗа</title>
+    <title>ВУЗ-Портал: Задания и Документы</title>
     <style>
-        body { font-family: sans-serif; padding: 20px; background-color: #f4f4f9; }
-        .container { max-width: 600px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-        h1 { text-align: center; color: #333; }
-        input[type="text"], input[type="email"], input[type="password"], select { width: 100%; padding: 10px; margin: 8px 0; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
-        button { background-color: #007bff; color: white; padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; width: 100%; margin-top: 10px; font-size: 16px; }
-        button:hover { background-color: #0056b3; }
-        #message { margin-top: 20px; padding: 10px; border-radius: 4px; }
-        .error { background-color: #f2dede; color: #a94442; border: 1px solid #ebccd1; }
-        .success { background-color: #dff0d8; color: #3c763d; border: 1px solid #d6e9c6; }
-        #auth-status { text-align: center; font-size: 1.2em; font-weight: bold; margin-bottom: 20px; }
-        .hidden { display: none; }
-        .tabs { display: flex; justify-content: space-around; margin-bottom: 20px; }
-        .tab-button { background: none; border: none; padding: 10px; cursor: pointer; font-size: 16px; flex-grow: 1; }
-        .tab-button.active { border-bottom: 2px solid #007bff; font-weight: bold; color: #007bff; }
-        #curator-panel { border: 1px solid #007bff; padding: 15px; margin-top: 20px; border-radius: 6px; background-color: #e6f0ff; }
-        #curator-panel h3 { color: #007bff; text-align: center; }
+        /* Общие стили */
+        body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background-color: #f4f4f9; }
+        #app { max-width: 900px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+        h1 { color: #333; border-bottom: 2px solid #007bff; padding-bottom: 10px; margin-bottom: 20px; }
+        button { background-color: #007bff; color: white; padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; margin-right: 10px; transition: background-color 0.3s; }
+        button:hover:not(:disabled) { background-color: #0056b3; }
+        button:disabled { background-color: #ccc; cursor: not-allowed; }
+        input[type="email"], input[type="password"], input[type="text"], textarea { width: calc(100% - 22px); padding: 10px; margin: 5px 0 15px 0; display: inline-block; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        .error { color: red; margin-bottom: 10px; }
+        .success { color: green; margin-bottom: 10px; }
+
+        /* Стили для ролей и документов */
+        #user-info { margin-bottom: 20px; padding: 15px; border: 1px dashed #007bff; border-radius: 4px; }
+        .document-list-item { padding: 10px; border: 1px solid #eee; margin-bottom: 8px; border-left: 5px solid #007bff; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
+        .document-list-item:hover { background-color: #f0f8ff; }
+        .status-sent { color: #ff9800; }
+        .status-in_progress { color: #2196f3; font-weight: bold; }
+        .status-completed { color: #4caf50; font-weight: bold; }
+
+        /* Интерфейс заполнения */
+        #filling-interface-container { border: 2px solid #ccc; padding: 20px; border-radius: 4px; margin-top: 20px; background-color: #fcfcfc; }
+        .fillable-field { margin: 10px 0; padding: 5px 10px; background: #fffacd; border: 1px solid #ffcc00; border-radius: 3px; display: inline-block; }
     </style>
 </head>
 <body>
 
-    <div class="container">
-        <h1 id="greeting-title">Портал ВУЗа</h1>
-        
-        <div id="auth-status" class="hidden"></div>
-        
-        <div id="auth-area">
-            <div class="tabs">
-                <button class="tab-button active" id="show-login-btn">Вход</button>
-                <button class="tab-button" id="show-register-btn">Регистрация</button>
-            </div>
+<div id="app">
+    <h1>ВУЗ-Портал</h1>
+    <div id="message" class="error"></div>
 
-            <form id="login-form" class="auth-form">
-                <input type="email" id="login-email" placeholder="Корпоративный Email (curator@vuz.ru, Пароль: 123456)" required>
-                <input type="password" id="login-password" placeholder="Пароль" required>
-                <button type="submit">Войти</button>
-            </form>
-
-            <form id="register-form" class="auth-form hidden">
-                <input type="text" id="register-name" placeholder="Фамилия Имя" required>
-                <input type="email" id="register-email" placeholder="Email для ВУЗа" required>
-                <input type="password" id="register-password" placeholder="Пароль (мин. 6 символов)" required>
-                <button type="submit">Зарегистрироваться (Студент)</button>
-            </form>
-        </div>
-        
-        <div id="curator-panel" class="hidden">
-            <h3>Панель Куратора (Управление Ролями)</h3>
-            <form id="role-update-form">
-                <input type="email" id="target-email" placeholder="Email пользователя для изменения" required>
-                <select id="new-role" required>
-                    <option value="" disabled selected>Выберите новую роль</option>
-                    <option value="Студент">Студент</option>
-                    <option value="Преподаватель">Преподаватель</option>
-                    <option value="Куратор">Куратор</option>
-                </select>
-                <button type="submit">Изменить Роль</button>
-            </form>
-        </div>
-
-        <button id="logout-button" class="hidden">Выйти из системы</button>
-
-        <div id="message" class="hidden"></div>
+    <div id="auth-area">
+        <h2>Авторизация</h2>
+        <input type="email" id="login-email" placeholder="Email" value="student@vuz.ru">
+        <input type="password" id="login-password" placeholder="Пароль" value="123456">
+        <button onclick="handleLogin()">Войти</button>
+        <button onclick="showRegister()">Регистрация</button>
     </div>
 
-    <script>
-        // !!! ВАЖНО: ЗАМЕНИТЕ ЭТОТ АДРЕС ПОСЛЕ РАЗВЕРТЫВАНИЯ БЭКЕНДА !!!
-        const API_URL = 'https://vuz-auth-api.onrender.com/api';  
+    <div id="register-area" style="display: none;">
+        <h2>Регистрация</h2>
+        <input type="email" id="reg-email" placeholder="Email">
+        <input type="password" id="reg-password" placeholder="Пароль">
+        <input type="text" id="reg-full-name" placeholder="ФИО">
+        <select id="reg-role">
+            <option value="Студент">Студент</option>
+            <option value="Преподаватель">Преподаватель</option>
+            <option value="Куратор">Куратор</option>
+        </select>
+        <button onclick="handleRegister()">Зарегистрироваться</button>
+        <button onclick="showLogin()">Назад к логину</button>
+    </div>
 
-        // Элементы
-        const authArea = document.getElementById('auth-area');
-        const loginForm = document.getElementById('login-form');
-        const registerForm = document.getElementById('register-form');
-        const logoutButton = document.getElementById('logout-button');
-        const authStatus = document.getElementById('auth-status');
-        const messageDiv = document.getElementById('message');
-        const greetingTitle = document.getElementById('greeting-title');
-        const showLoginBtn = document.getElementById('show-login-btn');
-        const showRegisterBtn = document.getElementById('show-register-btn');
-        const curatorPanel = document.getElementById('curator-panel');
-        const roleUpdateForm = document.getElementById('role-update-form');
+    <div id="main-area" style="display: none;">
+        <div id="user-info"></div>
+        <button onclick="handleLogout()">Выйти</button>
+        <hr>
+        <div id="role-panel">
+            </div>
+        
+        <div id="filling-interface-container" style="display: none;">
+            <h3>Заполнение документа: <span id="current-doc-title"></span></h3>
+            <div id="document-content-editor">
+                </div>
+            <button onclick="saveDocumentContent('in_progress')" id="save-draft-btn">Сохранить черновик</button>
+            <button onclick="saveDocumentContent('completed')" id="submit-btn">Отправить на проверку</button>
+            <button onclick="renderRolePanel()">К списку заданий</button>
+        </div>
+    </div>
+</div>
 
+<script>
+    const API_URL = 'https://vuz-auth-api.onrender.com/api'; 
+    let currentUser = null;
+    let currentDocumentId = null;
 
-        function displayMessage(text, isError = false) {
-            messageDiv.textContent = text;
-            messageDiv.className = isError ? 'error' : 'success';
-            messageDiv.classList.remove('hidden');
-        }
+    // --- УТИЛИТЫ ---
+    function setToken(token) {
+        localStorage.setItem('authToken', token);
+    }
+    function getToken() {
+        return localStorage.getItem('authToken');
+    }
+    function clearToken() {
+        localStorage.removeItem('authToken');
+    }
+    function showMessage(type, text) {
+        const msgElement = document.getElementById('message');
+        msgElement.className = type;
+        msgElement.textContent = text;
+    }
+    function clearMessages() {
+        showMessage('error', '');
+    }
 
-        function showForm(formId) {
-            showLoginBtn.classList.remove('active');
-            showRegisterBtn.classList.remove('active');
-            loginForm.classList.add('hidden');
-            registerForm.classList.add('hidden');
-            
-            if (formId === 'login') {
-                showLoginBtn.classList.add('active');
-                loginForm.classList.remove('hidden');
-                greetingTitle.textContent = "Вход в Портал";
+    // --- ЛОГИКА АВТОРИЗАЦИИ/РЕГИСТРАЦИИ ---
+
+    function showRegister() {
+        document.getElementById('auth-area').style.display = 'none';
+        document.getElementById('register-area').style.display = 'block';
+        clearMessages();
+    }
+    function showLogin() {
+        document.getElementById('auth-area').style.display = 'block';
+        document.getElementById('register-area').style.display = 'none';
+        clearMessages();
+    }
+
+    async function handleLogin() {
+        clearMessages();
+        const email = document.getElementById('login-email').value;
+        const password = document.getElementById('login-password').value;
+
+        try {
+            const response = await fetch(`${API_URL}/login`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, password }),
+            });
+            const data = await response.json();
+
+            if (data.success) {
+                setToken(data.token);
+                currentUser = data.user;
+                renderMainArea();
             } else {
-                showRegisterBtn.classList.add('active');
-                registerForm.classList.remove('hidden');
-                greetingTitle.textContent = "Создание Учетной Записи";
+                showMessage('error', data.message);
             }
-            messageDiv.classList.add('hidden');
-            curatorPanel.classList.add('hidden'); 
+        } catch (e) {
+            showMessage('error', 'Ошибка сети при авторизации.');
+        }
+    }
+
+    async function handleRegister() {
+        clearMessages();
+        const email = document.getElementById('reg-email').value;
+        const password = document.getElementById('reg-password').value;
+        const fullName = document.getElementById('reg-full-name').value;
+        const role = document.getElementById('reg-role').value;
+
+        try {
+            const response = await fetch(`${API_URL}/register`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, password, role, full_name: fullName }),
+            });
+            const data = await response.json();
+
+            if (data.success) {
+                showMessage('success', 'Регистрация успешна! Теперь войдите.');
+                // Очистка формы
+                document.getElementById('reg-email').value = '';
+                document.getElementById('reg-password').value = '';
+                document.getElementById('reg-full-name').value = '';
+                showLogin();
+            } else {
+                showMessage('error', data.message);
+            }
+        } catch (e) {
+            showMessage('error', 'Ошибка сети при регистрации.');
+        }
+    }
+
+    function handleLogout() {
+        clearToken();
+        currentUser = null;
+        document.getElementById('auth-area').style.display = 'block';
+        document.getElementById('register-area').style.display = 'none';
+        document.getElementById('main-area').style.display = 'none';
+        clearMessages();
+    }
+
+    // --- РЕНДЕРИНГ ИНТЕРФЕЙСА ПОСЛЕ АВТОРИЗАЦИИ ---
+
+    function renderMainArea() {
+        document.getElementById('auth-area').style.display = 'none';
+        document.getElementById('register-area').style.display = 'none';
+        document.getElementById('main-area').style.display = 'block';
+        
+        const userInfo = document.getElementById('user-info');
+        userInfo.innerHTML = `
+            <strong>${currentUser.full_name}</strong>
+            <br>Email: ${currentUser.email}
+            <br>Роль: <strong>${currentUser.role}</strong>
+        `;
+        
+        renderRolePanel();
+    }
+
+    function renderRolePanel() {
+        // Скрыть интерфейс заполнения при переходе в панель
+        document.getElementById('filling-interface-container').style.display = 'none';
+        const panel = document.getElementById('role-panel');
+        panel.style.display = 'block';
+        panel.innerHTML = '<h2>Рабочая Область</h2>';
+        clearMessages();
+
+        if (currentUser.role === 'Студент') {
+            renderStudentPanel(panel);
+        } else if (currentUser.role === 'Преподаватель' || currentUser.role === 'Куратор') {
+            renderTeacherPanel(panel);
+        } else {
+            panel.innerHTML += '<p>Ваша роль не имеет дополнительных функций на портале.</p>';
+        }
+    }
+
+    // --- ПАНЕЛЬ СТУДЕНТА ---
+
+    async function renderStudentPanel(panel) {
+        panel.innerHTML += '<h3>Мои Задания</h3>';
+        
+        try {
+            const response = await fetch(`${API_URL}/api/documents`, {
+                headers: { 'Authorization': `Bearer ${getToken()}` },
+            });
+            const data = await response.json();
+
+            if (data.success) {
+                const list = document.createElement('div');
+                if (data.documents.length === 0) {
+                    list.textContent = 'У вас нет активных заданий.';
+                } else {
+                    data.documents.forEach(doc => {
+                        const item = document.createElement('div');
+                        item.className = 'document-list-item';
+                        item.innerHTML = `
+                            <span>${doc.title} (Назначил: ${doc.assignedBy})</span>
+                            <span class="status-${doc.status}">Статус: ${doc.status}</span>
+                        `;
+                        item.onclick = () => showDocumentFillingInterface(doc.id, doc.title, doc.status);
+                        list.appendChild(item);
+                    });
+                }
+                panel.appendChild(list);
+            } else {
+                showMessage('error', data.message);
+            }
+        } catch (e) {
+            showMessage('error', 'Ошибка при загрузке списка заданий.');
+        }
+    }
+
+    // --- ЛОГИКА ЗАПОЛНЕНИЯ ДОКУМЕНТА (КЛЮЧЕВАЯ ФУНКЦИЯ) ---
+
+    async function showDocumentFillingInterface(docId, docTitle, docStatus) {
+        document.getElementById('role-panel').style.display = 'none';
+        const container = document.getElementById('filling-interface-container');
+        container.style.display = 'block';
+        document.getElementById('current-doc-title').textContent = docTitle;
+        currentDocumentId = docId;
+        
+        const editor = document.getElementById('document-content-editor');
+        editor.innerHTML = 'Загрузка...';
+
+        try {
+            const response = await fetch(`${API_URL}/api/documents/${docId}`, {
+                headers: { 'Authorization': `Bearer ${getToken()}` },
+            });
+            const data = await response.json();
+
+            if (data.success) {
+                const doc = data.document;
+                // Используем currentContent, так как он содержит заполненные данные (если есть)
+                const content = doc.currentContent || doc.templateContent; 
+                
+                // 1. Находим все маркеры вида {{fieldName}}
+                const regex = /\{\{(.*?)\}\}/g;
+                let match;
+                let htmlOutput = '';
+                let lastIndex = 0;
+
+                while ((match = regex.exec(content)) !== null) {
+                    const fieldName = match[1].trim(); // Например, 'studentName'
+                    const marker = match[0]; // Например, '{{studentName}}'
+                    const textBefore = content.substring(lastIndex, match.index);
+
+                    // Добавляем текст до маркера
+                    htmlOutput += textBefore.replace(/\n/g, '<br>'); // Заменяем переносы строки на <br>
+
+                    // Добавляем поле ввода
+                    // Используем атрибут data-marker для сохранения имени поля
+                    htmlOutput += `
+                        <div class="fillable-field">
+                            <label for="${fieldName}">[${fieldName}]:</label>
+                            <input type="text" id="${fieldName}" data-marker="${marker}" data-field-name="${fieldName}" style="width: 200px;">
+                        </div>
+                    `;
+
+                    lastIndex = regex.lastIndex;
+                }
+                // Добавляем оставшийся текст после последнего маркера
+                htmlOutput += content.substring(lastIndex).replace(/\n/g, '<br>');
+
+                editor.innerHTML = htmlOutput;
+                
+                // Деактивировать кнопки, если статус "completed"
+                const isCompleted = docStatus === 'completed';
+                document.getElementById('save-draft-btn').disabled = isCompleted;
+                document.getElementById('submit-btn').disabled = isCompleted;
+                if(isCompleted) {
+                    showMessage('success', 'Документ отправлен на проверку. Редактирование невозможно.');
+                }
+                
+                // --- 2. ЭКСТРАКТОР: Если в currentContent уже есть заполненные данные, заполняем input-ы ---
+                // Поскольку мы не знаем формат заполненных данных, мы будем ожидать, что бэкенд возвращает
+                // текст, где маркеры заменены на реальные значения.
+                // В нашей текущей модели currentContent - это уже текст с заменами. 
+                // Чтобы сохранить заполненные данные, нам нужно их "обратно" извлечь из полей.
+                
+                // Для простоты, оставим currentContent как исходный текст (TemplateContent) 
+                // и будем использовать его для сохранения. 
+                // При следующем открытии, поля будут пустыми, если мы не внедрим сложный парсер. 
+                // *ПРИМЕЧАНИЕ*: Для production нужно будет хранить заполненные данные в виде JSON, а не текста.
+                
+            } else {
+                editor.innerHTML = `<p class="error">${data.message}</p>`;
+            }
+        } catch (e) {
+            editor.innerHTML = `<p class="error">Ошибка сети при загрузке документа.</p>`;
+        }
+    }
+
+    async function saveDocumentContent(status) {
+        clearMessages();
+        if (!currentDocumentId) {
+            showMessage('error', 'Ошибка: ID документа не установлен.');
+            return;
         }
 
-        async function checkAuth() {
-            const token = localStorage.getItem('authToken');
-            
-            if (!token) {
-                authStatus.classList.add('hidden');
-                authArea.classList.remove('hidden');
-                logoutButton.classList.add('hidden');
-                curatorPanel.classList.add('hidden');
-                showForm('login');
-                return;
-            }
+        const editor = document.getElementById('document-content-editor');
+        const inputFields = editor.querySelectorAll('input[data-marker]');
+        let newContent = ''; // Это будет финальный текст для сохранения
 
-            try {
-                const response = await fetch(`${API_URL}/greeting`, {
-                    method: 'GET',
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
+        // 1. Получаем исходный шаблон (нужно получить его снова, чтобы восстановить структуру)
+        const docResponse = await fetch(`${API_URL}/api/documents/${currentDocumentId}`, {
+            headers: { 'Authorization': `Bearer ${getToken()}` },
+        });
+        const docData = await docResponse.json();
+        if (!docData.success) {
+            showMessage('error', 'Не удалось получить исходный шаблон документа для сохранения.');
+            return;
+        }
+        let contentToUpdate = docData.document.templateContent; // Используем templateContent как базу
 
-                if (response.ok) {
-                    const data = await response.json();
-                    
-                    greetingTitle.textContent = `Добро пожаловать, ${data.userName}!`;
-                    authStatus.textContent = `Ваша роль: ${data.userRole}`;
-                    authStatus.className = 'success';
-                    authStatus.classList.remove('hidden');
+        // 2. Заменяем маркеры в templateContent на данные из полей ввода
+        inputFields.forEach(input => {
+            const marker = input.getAttribute('data-marker'); // Например, {{fieldName}}
+            const value = input.value || ''; // Значение, которое ввел студент
 
-                    authArea.classList.add('hidden'); 
-                    logoutButton.classList.remove('hidden');
+            // Замена маркера на реальное значение
+            // NOTE: Мы заменяем *только* в тексте, который отправляем на сервер.
+            // На сервере хранится текст с заполненными данными.
+            contentToUpdate = contentToUpdate.replace(new RegExp(marker.replace(/([.*+?^=!:${}()|[\]\/\\])/g,"\\$1"), 'g'), value);
+        });
+        
+        newContent = contentToUpdate;
 
-                    // ПОКАЗАТЬ ПАНЕЛЬ КУРАТОРА
-                    if (data.userRole === 'Куратор') {
-                         curatorPanel.classList.remove('hidden');
-                    } else {
-                        curatorPanel.classList.add('hidden');
-                    }
+        try {
+            const response = await fetch(`${API_URL}/api/documents/${currentDocumentId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` },
+                body: JSON.stringify({ content: newContent, status }),
+            });
+            const data = await response.json();
 
-                } else if (response.status === 403 || response.status === 401) {
-                    displayMessage('Ваша сессия истекла. Пожалуйста, войдите снова.', true);
-                    logout(false); 
-                } else {
-                    displayMessage('Ошибка при проверке аутентификации.', true);
-                    logout(false);
+            if (data.success) {
+                showMessage('success', data.message);
+                if (status === 'completed') {
+                    document.getElementById('save-draft-btn').disabled = true;
+                    document.getElementById('submit-btn').disabled = true;
                 }
-            } catch (error) {
-                console.error("Ошибка сети:", error);
-                displayMessage('Не удалось подключиться к серверу API.', true);
-                logout(false);
+            } else {
+                showMessage('error', data.message);
             }
+        } catch (e) {
+            showMessage('error', 'Ошибка сети при сохранении документа.');
+        }
+    }
+
+    // --- ПАНЕЛЬ ПРЕПОДАВАТЕЛЯ/КУРАТОРА ---
+
+    async function renderTeacherPanel(panel) {
+        panel.innerHTML += '<h3>Управление Заданиями</h3>';
+        
+        // Форма для создания нового задания
+        panel.innerHTML += `
+            <h4>Создать новое задание</h4>
+            <input type="text" id="doc-title" placeholder="Название задания (например, Отчет №1)">
+            <input type="email" id="doc-target-email" placeholder="Email студента (например, student@vuz.ru)">
+            <textarea id="doc-template" rows="8" placeholder="Шаблон документа. Используйте {{fieldName}} для полей ввода. Пример: Добрый день, {{studentName}}. Дата заполнения: {{date}}"></textarea>
+            <button onclick="createDocument()">Отправить задание студенту</button>
+            <hr>
+        `;
+
+        // Список отправленных заданий
+        panel.innerHTML += '<h4>Отправленные задания</h4>';
+        try {
+            const response = await fetch(`${API_URL}/api/documents`, {
+                headers: { 'Authorization': `Bearer ${getToken()}` },
+            });
+            const data = await response.json();
+
+            if (data.success) {
+                const list = document.createElement('div');
+                if (data.documents.length === 0) {
+                    list.textContent = 'Вы еще не отправляли задания.';
+                } else {
+                    data.documents.forEach(doc => {
+                        const item = document.createElement('div');
+                        item.className = 'document-list-item';
+                        item.innerHTML = `
+                            <span>${doc.title} (Кому: ${doc.targetStudentEmail})</span>
+                            <span class="status-${doc.status}">Статус: ${doc.status}</span>
+                        `;
+                        // Преподаватель может посмотреть заполненный документ, но не редактировать
+                        item.onclick = () => viewCompletedDocument(doc.id, doc.title, doc.status, doc.targetStudentEmail);
+                        list.appendChild(item);
+                    });
+                }
+                panel.appendChild(list);
+            } else {
+                showMessage('error', data.message);
+            }
+        } catch (e) {
+            showMessage('error', 'Ошибка при загрузке списка отправленных заданий.');
+        }
+    }
+
+    async function createDocument() {
+        clearMessages();
+        const title = document.getElementById('doc-title').value;
+        const targetStudentEmail = document.getElementById('doc-target-email').value;
+        const templateContent = document.getElementById('doc-template').value;
+
+        if (!title || !targetStudentEmail || !templateContent) {
+            showMessage('error', 'Заполните все поля для создания задания.');
+            return;
         }
 
-        // Логика регистрации
-        registerForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const name = document.getElementById('register-name').value;
-            const email = document.getElementById('register-email').value;
-            const password = document.getElementById('register-password').value;
+        try {
+            const response = await fetch(`${API_URL}/api/documents/create`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` },
+                body: JSON.stringify({ title, templateContent, targetStudentEmail }),
+            });
+            const data = await response.json();
 
-            try {
-                const response = await fetch(`${API_URL}/register`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name, email, password })
-                });
-
-                const data = await response.json();
-
-                if (response.ok && data.success) {
-                    displayMessage(data.message, false); 
-                    registerForm.reset();
-                    showForm('login');
-
-                } else {
-                    displayMessage(data.message || 'Ошибка регистрации.', true);
-                }
-
-            } catch (error) {
-                displayMessage('Ошибка сети при регистрации.', true);
+            if (data.success) {
+                showMessage('success', data.message);
+                // Очистка формы и обновление списка
+                document.getElementById('doc-title').value = '';
+                document.getElementById('doc-target-email').value = '';
+                document.getElementById('doc-template').value = '';
+                renderRolePanel(); 
+            } else {
+                showMessage('error', data.message);
             }
-        });
-
-
-        // Логика входа
-        loginForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const email = document.getElementById('login-email').value;
-            const password = document.getElementById('login-password').value;
-
-            try {
-                const response = await fetch(`${API_URL}/login`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email, password })
-                });
-
-                const data = await response.json();
-
-                if (response.ok && data.success) {
-                    localStorage.setItem('authToken', data.token); 
-                    displayMessage(`Успешный вход! Ваша роль: ${data.role}`, false); 
-                    checkAuth(); 
-
-                } else {
-                    displayMessage(data.message || 'Проверьте Email и пароль.', true);
-                }
-
-            } catch (error) {
-                displayMessage('Ошибка сети при входе.', true);
-            }
-        });
-
-        // ЛОГИКА: ФОРМА ИЗМЕНЕНИЯ РОЛИ КУРАТОРОМ
-        roleUpdateForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const email = document.getElementById('target-email').value;
-            const newRole = document.getElementById('new-role').value;
-            const token = localStorage.getItem('authToken');
-
-            if (!token) {
-                displayMessage('Ошибка: Не авторизован.', true);
-                return;
-            }
-
-            try {
-                const response = await fetch(`${API_URL}/users/role`, {
-                    method: 'PUT',
-                    headers: { 
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}` 
-                    },
-                    body: JSON.stringify({ email: email, newRole: newRole })
-                });
-
-                const data = await response.json();
-
-                if (response.ok && data.success) {
-                    displayMessage(data.message, false);
-                    roleUpdateForm.reset();
-                } else {
-                    // Это может быть "Доступ запрещен. Требуется роль Куратор."
-                    displayMessage(data.message || 'Ошибка изменения роли.', true); 
-                }
-
-            } catch (error) {
-                displayMessage('Ошибка сети при обновлении роли.', true);
-            }
-        });
-
-
-        function logout(showMessage = true) {
-            localStorage.removeItem('authToken'); 
-            checkAuth(); 
-            if (showMessage) {
-                 displayMessage('Выход выполнен.', false);
-            }
+        } catch (e) {
+            showMessage('error', 'Ошибка сети при отправке задания.');
         }
+    }
+    
+    // --- ПРОСМОТР ДОКУМЕНТА ПРЕПОДАВАТЕЛЕМ ---
+    async function viewCompletedDocument(docId, docTitle, docStatus, targetEmail) {
+        document.getElementById('role-panel').style.display = 'none';
+        const container = document.getElementById('filling-interface-container');
+        container.style.display = 'block';
+        document.getElementById('current-doc-title').textContent = `${docTitle} (Студент: ${targetEmail})`;
+        
+        const editor = document.getElementById('document-content-editor');
+        editor.innerHTML = 'Загрузка...';
 
-        // Обработчики событий
-        logoutButton.addEventListener('click', () => logout(true));
-        showLoginBtn.addEventListener('click', () => showForm('login'));
-        showRegisterBtn.addEventListener('click', () => showForm('register'));
+        // Скрыть кнопки сохранения для преподавателя
+        document.getElementById('save-draft-btn').style.display = 'none';
+        document.getElementById('submit-btn').style.display = 'none';
 
-        // Проверяем статус при загрузке страницы
-        checkAuth();
-    </script>
+        try {
+            const response = await fetch(`${API_URL}/api/documents/${docId}`, {
+                headers: { 'Authorization': `Bearer ${getToken()}` },
+            });
+            const data = await response.json();
+
+            if (data.success) {
+                const doc = data.document;
+                // Преподаватель видит текущее заполненное содержимое
+                const content = doc.currentContent; 
+                
+                // Просто отображаем текст, заменяя переносы строки.
+                editor.innerHTML = `
+                    <p><strong>Текущий статус:</strong> <span class="status-${docStatus}">${docStatus}</span></p>
+                    <div style="border: 1px dashed #333; padding: 15px; white-space: pre-wrap;">${content}</div>
+                `;
+                
+                if (docStatus !== 'completed') {
+                    showMessage('error', 'Студент еще не завершил заполнение этого документа.');
+                } else {
+                    showMessage('success', 'Документ заполнен студентом и готов к проверке.');
+                }
+
+            } else {
+                editor.innerHTML = `<p class="error">${data.message}</p>`;
+            }
+        } catch (e) {
+            editor.innerHTML = `<p class="error">Ошибка сети при загрузке документа.</p>`;
+        }
+    }
+
+
+    // --- ИНИЦИАЛИЗАЦИЯ ПРИ ЗАГРУЗКЕ СТРАНИЦЫ ---
+
+    // Проверяем токен при загрузке
+    async function init() {
+        const token = getToken();
+        if (token) {
+            try {
+                const response = await fetch(`${API_URL}/profile`, {
+                    headers: { 'Authorization': `Bearer ${token}` },
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    currentUser = data.user;
+                    renderMainArea();
+                } else {
+                    clearToken();
+                    showLogin();
+                }
+            } catch (e) {
+                clearToken();
+                showLogin();
+                showMessage('error', 'Не удалось связаться с сервером. Попробуйте войти снова.');
+            }
+        } else {
+            showLogin();
+        }
+    }
+
+    init();
+</script>
+
 </body>
 </html>
