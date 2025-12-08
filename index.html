@@ -5,12 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Портал ВУЗа</title>
     <style>
-        /* ... (Стили, как в предыдущем ответе) ... */
         body { font-family: sans-serif; padding: 20px; background-color: #f4f4f9; }
-        .container { max-width: 400px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .container { max-width: 600px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
         h1 { text-align: center; color: #333; }
-        input[type="text"], input[type="email"], input[type="password"] { width: 100%; padding: 10px; margin: 8px 0; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
-        button { background-color: #007bff; /* Синий цвет для ВУЗа */ color: white; padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; width: 100%; margin-top: 10px; font-size: 16px; }
+        input[type="text"], input[type="email"], input[type="password"], select { width: 100%; padding: 10px; margin: 8px 0; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        button { background-color: #007bff; color: white; padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; width: 100%; margin-top: 10px; font-size: 16px; }
         button:hover { background-color: #0056b3; }
         #message { margin-top: 20px; padding: 10px; border-radius: 4px; }
         .error { background-color: #f2dede; color: #a94442; border: 1px solid #ebccd1; }
@@ -20,6 +19,8 @@
         .tabs { display: flex; justify-content: space-around; margin-bottom: 20px; }
         .tab-button { background: none; border: none; padding: 10px; cursor: pointer; font-size: 16px; flex-grow: 1; }
         .tab-button.active { border-bottom: 2px solid #007bff; font-weight: bold; color: #007bff; }
+        #curator-panel { border: 1px solid #007bff; padding: 15px; margin-top: 20px; border-radius: 6px; background-color: #e6f0ff; }
+        #curator-panel h3 { color: #007bff; text-align: center; }
     </style>
 </head>
 <body>
@@ -36,8 +37,8 @@
             </div>
 
             <form id="login-form" class="auth-form">
-                <input type="email" id="login-email" placeholder="Корпоративный Email" required>
-                <input type="password" id="login-password" placeholder="Пароль" required>
+                <input type="email" id="login-email" placeholder="Корпоративный Email (curator@vuz.ru / student@vuz.ru)" required>
+                <input type="password" id="login-password" placeholder="Пароль (123456)" required>
                 <button type="submit">Войти</button>
             </form>
 
@@ -45,10 +46,24 @@
                 <input type="text" id="register-name" placeholder="Фамилия Имя" required>
                 <input type="email" id="register-email" placeholder="Email для ВУЗа" required>
                 <input type="password" id="register-password" placeholder="Пароль (мин. 6 символов)" required>
-                <button type="submit">Зарегистрироваться</button>
+                <button type="submit">Зарегистрироваться (Студент)</button>
             </form>
         </div>
         
+        <div id="curator-panel" class="hidden">
+            <h3>Панель Куратора (Управление Ролями)</h3>
+            <form id="role-update-form">
+                <input type="email" id="target-email" placeholder="Email пользователя для изменения" required>
+                <select id="new-role" required>
+                    <option value="" disabled selected>Выберите новую роль</option>
+                    <option value="Студент">Студент</option>
+                    <option value="Преподаватель">Преподаватель</option>
+                    <option value="Куратор">Куратор</option>
+                </select>
+                <button type="submit">Изменить Роль</button>
+            </form>
+        </div>
+
         <button id="logout-button" class="hidden">Выйти из системы</button>
 
         <div id="message" class="hidden"></div>
@@ -56,9 +71,9 @@
 
     <script>
         // !!! ВАЖНО: ЗАМЕНИТЕ ЭТОТ АДРЕС ПОСЛЕ РАЗВЕРТЫВАНИЯ БЭКЕНДА !!!
-        // Например: 'https://vuz-auth-api.onrender.com/api'
-        const API_URL = 'https://vuz-auth-api.onrender.com/api'; 
+        const API_URL = 'https://vuz-auth-api.onrender.com/api';
 
+        // Элементы
         const authArea = document.getElementById('auth-area');
         const loginForm = document.getElementById('login-form');
         const registerForm = document.getElementById('register-form');
@@ -68,6 +83,9 @@
         const greetingTitle = document.getElementById('greeting-title');
         const showLoginBtn = document.getElementById('show-login-btn');
         const showRegisterBtn = document.getElementById('show-register-btn');
+        const curatorPanel = document.getElementById('curator-panel');
+        const roleUpdateForm = document.getElementById('role-update-form');
+
 
         function displayMessage(text, isError = false) {
             messageDiv.textContent = text;
@@ -91,7 +109,8 @@
                 registerForm.classList.remove('hidden');
                 greetingTitle.textContent = "Создание Учетной Записи";
             }
-            messageDiv.classList.add('hidden'); 
+            messageDiv.classList.add('hidden');
+            curatorPanel.classList.add('hidden'); // Скрываем панель при выходе/смене формы 
         }
 
         async function checkAuth() {
@@ -101,6 +120,7 @@
                 authStatus.classList.add('hidden');
                 authArea.classList.remove('hidden');
                 logoutButton.classList.add('hidden');
+                curatorPanel.classList.add('hidden');
                 showForm('login');
                 return;
             }
@@ -114,13 +134,20 @@
                 if (response.ok) {
                     const data = await response.json();
                     
-                    greetingTitle.textContent = data.message;
-                    authStatus.textContent = `Добро пожаловать в Портал ВУЗа!`;
+                    greetingTitle.textContent = `Добро пожаловать, ${data.userName}!`;
+                    authStatus.textContent = `Ваша роль: ${data.userRole}`;
                     authStatus.className = 'success';
                     authStatus.classList.remove('hidden');
 
                     authArea.classList.add('hidden'); 
                     logoutButton.classList.remove('hidden');
+
+                    // !!! НОВАЯ ЛОГИКА: ПОКАЗАТЬ ПАНЕЛЬ КУРАТОРА !!!
+                    if (data.userRole === 'Куратор') {
+                         curatorPanel.classList.remove('hidden');
+                    } else {
+                        curatorPanel.classList.add('hidden');
+                    }
 
                 } else if (response.status === 403 || response.status === 401) {
                     displayMessage('Ваша сессия истекла. Пожалуйста, войдите снова.', true);
@@ -136,6 +163,7 @@
             }
         }
 
+        // Логика регистрации остается прежней...
         registerForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             const name = document.getElementById('register-name').value;
@@ -152,7 +180,7 @@
                 const data = await response.json();
 
                 if (response.ok && data.success) {
-                    displayMessage('Регистрация успешна! Теперь выполните вход.', false);
+                    displayMessage(data.message, false); // Сообщение теперь включает "Вы Студент."
                     registerForm.reset();
                     showForm('login');
 
@@ -166,6 +194,7 @@
         });
 
 
+        // Логика входа остается прежней, но проверяет роль
         loginForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             const email = document.getElementById('login-email').value;
@@ -182,7 +211,8 @@
 
                 if (response.ok && data.success) {
                     localStorage.setItem('authToken', data.token); 
-                    displayMessage('Успешный вход!', false);
+                    // Роль теперь возвращается в ответе, но мы используем checkAuth для полной проверки
+                    displayMessage(`Успешный вход! Ваша роль: ${data.role}`, false); 
                     checkAuth(); 
 
                 } else {
@@ -193,6 +223,43 @@
                 displayMessage('Ошибка сети при входе.', true);
             }
         });
+
+        // !!! НОВАЯ ЛОГИКА: ФОРМА ИЗМЕНЕНИЯ РОЛИ !!!
+        roleUpdateForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('target-email').value;
+            const newRole = document.getElementById('new-role').value;
+            const token = localStorage.getItem('authToken');
+
+            if (!token) {
+                displayMessage('Ошибка: Не авторизован.', true);
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_URL}/users/role`, {
+                    method: 'PUT',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}` 
+                    },
+                    body: JSON.stringify({ email: email, newRole: newRole })
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.success) {
+                    displayMessage(data.message, false);
+                    roleUpdateForm.reset();
+                } else {
+                    displayMessage(data.message || 'Ошибка изменения роли.', true);
+                }
+
+            } catch (error) {
+                displayMessage('Ошибка сети при обновлении роли.', true);
+            }
+        });
+
 
         function logout(showMessage = true) {
             localStorage.removeItem('authToken'); 
