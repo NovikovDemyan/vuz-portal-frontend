@@ -123,7 +123,7 @@
         // !!! ВАЖНО: ЗАМЕНИТЕ ЭТОТ АДРЕС НА ВАШ АДРЕС RENDER !!!
         const API_URL = 'https://vuz-auth-api.onrender.com/api';
 
-        // Элементы
+        // Элементы (ДОПОЛНЕНО)
         const authArea = document.getElementById('auth-area');
         const loginForm = document.getElementById('login-form');
         const registerForm = document.getElementById('register-form');
@@ -168,10 +168,10 @@
             }
             messageDiv.classList.add('hidden');
             curatorPanel.classList.add('hidden'); 
-            teacherPanel.classList.add('hidden');
-            studentPanel.classList.add('hidden');
+            teacherPanel.classList.add('hidden'); // Скрыть
+            studentPanel.classList.add('hidden'); // Скрыть
             usersTableContainer.innerHTML = ''; 
-            studentDocsList.innerHTML = '';
+            studentDocsList.innerHTML = ''; // Очищаем список документов
         }
 
         async function checkAuth() {
@@ -543,12 +543,12 @@
             }
         }
 
-        // Обработчики событий
+        // Обработчики событий (ДОПОЛНЕНО)
         logoutButton.addEventListener('click', () => logout(true));
         showLoginBtn.addEventListener('click', () => showForm('login'));
         showRegisterBtn.addEventListener('click', () => showForm('register'));
         showUsersBtn.addEventListener('click', fetchUsers); 
-        showStudentDocsBtn.addEventListener('click', fetchStudentDocuments); // Для Студента
+        showStudentDocsBtn.addEventListener('click', fetchStudentDocuments); // Новый обработчик
 
         // Проверяем статус при загрузке страницы
         checkAuth();
