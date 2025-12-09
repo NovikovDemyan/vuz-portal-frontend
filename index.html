@@ -381,18 +381,76 @@
             }
         }
         
-        // --- ЛОГИКА: ФУНКЦИЯ СКАЧИВАНИЯ ДОКУМЕНТА (КУРАТОР) ---
-        function downloadDocument(docId) {
-            const token = localStorage.getItem('authToken');
-            const url = `${API_URL}/documents/download/${docId}`;
+        // Вставьте в секцию <script> в index.html, заменив старую версию
+// --- ЛОГИКА: ФУНКЦИЯ СКАЧИВАНИЯ ДОКУМЕНТА (КУРАТОР) ---
+async function downloadDocument(docId) {
+    const token = localStorage.getItem('authToken');
+    const url = `${API_URL}/documents/download/${docId}`;
+    
+    if (!token) {
+        displayMessage('Ошибка: Не авторизован. Пожалуйста, войдите снова.', true);
+        return;
+    }
+    
+    displayMessage(`Начало загрузки документа ID ${docId}...`, false);
+
+    try {
+        // 1. Отправляем запрос с JWT-токеном через fetch
+        const response = await fetch(url, {
+            method: 'GET',
+            headers: { 
+                'Authorization': `Bearer ${token}` 
+            }
+        });
+
+        if (response.ok) {
+            // 2. Получаем данные как Blob (бинарный объект)
+            const blob = await response.blob(); 
             
-            // Поскольку прямое скачивание через fetch с заголовками неудобно, 
-            // а простая ссылка не передает JWT, мы используем window.open.
-            // При этом мы полагаемся на то, что браузер сохранит сессию/токен 
-            // или что сервер будет более либерален к GET-запросам на скачивание (как мы и сделали).
-            window.open(url, '_blank'); 
-            displayMessage(`Инициировано скачивание документа ID ${docId}. Проверьте загрузки браузера.`, false);
+            let filename = `document_${docId}_${new Date().toISOString().slice(0, 10)}.txt`;
+
+            // Попытка извлечь имя файла из заголовка Content-Disposition (как мы его установили в server.js)
+            const disposition = response.headers.get('Content-Disposition');
+            if (disposition && disposition.indexOf('attachment') !== -1) {
+                const filenameMatch = disposition.match(/filename="?(.+)"?/);
+                if (filenameMatch && filenameMatch[1]) {
+                    // Используем имя файла, которое прислал сервер
+                    filename = filenameMatch[1].replace(/['"]/g, ''); 
+                }
+            }
+
+            // 3. Создаем временную ссылку (URL) для Blob'а
+            const tempUrl = window.URL.createObjectURL(blob);
+            
+            // 4. Создаем невидимый элемент <a> для инициирования скачивания
+            const a = document.createElement('a');
+            a.style.display = 'none';
+            a.href = tempUrl;
+            a.download = filename; // Указываем имя файла
+            
+            document.body.appendChild(a);
+            a.click(); // 5. Инициируем скачивание
+            
+            // 6. Очищаем за собой
+            window.URL.revokeObjectURL(tempUrl); 
+            a.remove();
+            
+            displayMessage(`Документ ID ${docId} успешно загружен как ${filename}. Проверьте папку загрузок.`, false);
+
+        } else if (response.status === 401 || response.status === 403) {
+            // Ошибка авторизации
+            displayMessage('Ошибка авторизации (401/403). Убедитесь, что вы вошли как Куратор.', true);
+        } else {
+             // Любая другая ошибка сервера
+             const errorText = await response.text();
+             displayMessage(`Ошибка загрузки: ${response.status} ${response.statusText}.`, true);
         }
+
+    } catch (error) {
+        console.error('Ошибка сети при скачивании документа:', error);
+        displayMessage('Критическая ошибка сети при скачивании документа.', true);
+    }
+}
 
         // --- ЛОГИКА: ФУНКЦИЯ ПРОСМОТРА ВСЕХ ПОЛЬЗОВАТЕЛЕЙ (КУРАТОР) ---
         async function fetchUsers() {
