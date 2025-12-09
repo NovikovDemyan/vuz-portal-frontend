@@ -168,6 +168,8 @@
                 { type: "input", name: "Дата_Окончания", role: "Студент" },
                 { type: "text", content: ". Приказ о согласовании №" },
                 { type: "input", name: "Номер_Приказа_Ректора", role: "Преподаватель" },
+                { type: "text", content: " от " },
+                { type: "input", name: "Дата_Приказа_Ректора", role: "Преподаватель" }, 
                 { type: "text", content: "." }
             ],
             'Уведомление о Задолженности': [
@@ -179,6 +181,8 @@
                 { type: "input", name: "Тема_Долга", role: "Студент" },
                 { type: "text", content: ". Крайний срок сдачи до " },
                 { type: "input", name: "Крайний_Срок", role: "Преподаватель" },
+                { type: "text", content: ". Статус проверки Куратором: " },
+                { type: "input", name: "Статус_Куратора", role: "Преподаватель" },
                 { type: "text", content: "." }
             ],
             'Запрос на Смену Руководителя': [
@@ -190,6 +194,8 @@
                 { type: "input", name: "Новый_Руководитель", role: "Преподаватель" },
                 { type: "text", content: ". Причина, указанная студентом: " },
                 { type: "input", name: "Причина_Смены", role: "Студент" },
+                { type: "text", content: ". Дата утверждения: " },
+                { type: "input", name: "Дата_Утверждения_Декана", role: "Преподаватель" },
                 { type: "text", content: "." }
             ]
         };
@@ -324,7 +330,8 @@
                     // 2. Получаем данные как Blob (бинарный объект)
                     const blob = await response.blob(); 
                     
-                    let filename = `document_${docId}_${new Date().toISOString().slice(0, 10)}.txt`;
+                    // !!! ИЗМЕНЕНИЕ: Теперь ожидаем .docx по умолчанию !!!
+                    let filename = `document_${docId}_${new Date().toISOString().slice(0, 10)}.docx`;
 
                     // Попытка извлечь имя файла из заголовка Content-Disposition
                     const disposition = response.headers.get('Content-Disposition');
