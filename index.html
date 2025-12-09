@@ -573,7 +573,7 @@
                                 }
                                 
                                 // Текст, если поле пустое
-                                const displayValue = fieldValue || `[НЕ ЗАПОЛНЕН ${part.role.toUpperCase()}]`;
+                                const displayValue = fieldValue || `[НЕ ЗАПОЛНЕН ${part.role ? part.role.toUpperCase() : 'ПОЛЕ'}]`; // ИСПРАВЛЕНА СТРОКА 576
 
                                 partContainer.innerHTML = `<span class="${displayClass}">${displayValue}</span>`;
                             }
