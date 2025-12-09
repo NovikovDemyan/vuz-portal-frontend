@@ -10,7 +10,7 @@
         h1 { text-align: center; color: #333; }
         /* Общие стили для полей ввода */
         input[type="text"], input[type="email"], input[type="password"], select { width: 100%; padding: 10px; margin: 8px 0; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
-        textarea { width: 100%; padding: 10px; margin: 8px 0; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; font-family: monospace;}
+        textarea { width: 100%; padding: 10px; margin: 8px 0; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; font-family: sans-serif;}
         button { background-color: #007bff; color: white; padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; width: 100%; margin-top: 10px; font-size: 16px; }
         button:hover { background-color: #0056b3; }
         #message { margin-top: 20px; padding: 10px; border-radius: 4px; }
@@ -46,6 +46,12 @@
         /* Стили для просмотра преподавателем */
         .teacher-card .prefilled { background-color: #e6f0ff; color: #004085; } 
         .teacher-card .prefilled.student-data { background-color: #fff3e6; color: #856404; }
+        
+        .teacher-action-block { border: 2px solid #ffc107; padding: 15px; margin-top: 15px; background: #fffdf7; border-radius: 4px; }
+        .action-buttons { display: flex; gap: 10px; margin-top: 10px; }
+        .action-buttons button { width: 50%; }
+
+        .rejection-comment { background-color: #fce4e4; border: 1px solid #f00; padding: 10px; margin: 10px 0; border-radius: 4px; }
     </style>
 </head>
 <body>
@@ -98,7 +104,7 @@
             </div>
 
         <div id="teacher-panel" class="hidden">
-            <h3>Панель Преподавателя (Создание и Просмотр)</h3>
+            <h3>Панель Преподавателя (Создание и Проверка)</h3>
             
             <h4>1. Создание нового документа</h4>
             <label for="doc-template-name">Выберите шаблон документа:</label>
@@ -113,7 +119,7 @@
 
             <hr style="margin: 30px 0;">
 
-            <h4>2. Ваши созданные документы</h4>
+            <h4>2. Ваши созданные документы (Проверка и Архив)</h4>
             <button id="show-teacher-docs-btn">Обновить Список Документов</button>
             <div id="teacher-docs-list">
                 <p>Нажмите "Обновить Список Документов", чтобы увидеть статус и заполненные данные.</p>
@@ -122,7 +128,7 @@
         </div>
 
         <div id="student-panel" class="hidden">
-            <h3>Документы, ожидающие заполнения</h3>
+            <h3>Документы, ожидающие заполнения / доработки</h3>
             <button id="show-student-docs-btn">Обновить Список Документов</button>
             <div id="student-docs-list"></div>
         </div>
@@ -151,10 +157,8 @@
         const roleUpdateForm = document.getElementById('role-update-form');
         const showUsersBtn = document.getElementById('show-users-btn');
         const usersTableContainer = document.getElementById('users-table-container');
-        // Новые элементы для Куратора
         const showAllDocsBtn = document.getElementById('show-all-docs-btn');
         const allDocsList = document.getElementById('all-docs-list');
-        // Элементы для преподавателя/студента
         const teacherPanel = document.getElementById('teacher-panel');
         const docTemplateNameSelect = document.getElementById('doc-template-name');
         const studentPanel = document.getElementById('student-panel');
@@ -164,7 +168,7 @@
         const showTeacherDocsBtn = document.getElementById('show-teacher-docs-btn');
         const teacherDocsList = document.getElementById('teacher-docs-list');
         
-        // --- СПИСОК ШАБЛОНОВ ---
+        // --- СПИСОК ШАБЛОНОВ (ОБНОВЛЕН ДЛЯ СООТВЕТСТВИЯ СЕРВЕРУ) ---
         const templateParts = {
             'Заявление на Отпуск': [
                 { type: "text", content: "Я, Студент " },
@@ -175,7 +179,8 @@
                 { type: "input", name: "Дата_Окончания", role: "Студент" },
                 { type: "text", content: ". Приказ о согласовании №" },
                 { type: "input", name: "Номер_Приказа_Ректора", role: "Преподаватель" },
-                { type: "text", content: "." }
+                { type: "text", content: ". Примечание преподавателя: " }, // Добавлено
+                { type: "input", name: "Примечание_Преподавателя_Финальное", role: "Преподаватель" } // Добавлено
             ],
             'Уведомление о Задолженности': [
                 { type: "text", content: "Уважаемый Студент " },
@@ -239,7 +244,7 @@
             teacherPanel.classList.add('hidden'); 
             studentPanel.classList.add('hidden'); 
             usersTableContainer.innerHTML = ''; 
-            allDocsList.innerHTML = ''; // Очистка списка Куратора
+            allDocsList.innerHTML = ''; 
             studentDocsList.innerHTML = ''; 
             teacherCreationArea.innerHTML = ''; 
             teacherDocsList.innerHTML = '<p>Нажмите "Обновить Список Документов", чтобы увидеть статус и заполненные данные.</p>'; 
@@ -284,7 +289,7 @@
 
                     if (data.userRole === 'Куратор') {
                          curatorPanel.classList.remove('hidden');
-                         fetchCuratorDocuments(); // Загрузка документов для Куратора при входе
+                         fetchCuratorDocuments(); 
                     } else if (data.userRole === 'Преподаватель') {
                          teacherPanel.classList.remove('hidden');
                          fetchTeacherDocuments(); 
@@ -320,7 +325,6 @@
             displayMessage(`Начало загрузки документа ID ${docId}...`, false);
 
             try {
-                // 1. Отправляем запрос с JWT-токеном через fetch
                 const response = await fetch(url, {
                     method: 'GET',
                     headers: { 
@@ -329,12 +333,9 @@
                 });
 
                 if (response.ok) {
-                    // 2. Получаем данные как Blob (бинарный объект)
                     const blob = await response.blob(); 
-                    
                     let filename = `document_${docId}_${new Date().toISOString().slice(0, 10)}.txt`;
 
-                    // Попытка извлечь имя файла из заголовка Content-Disposition
                     const disposition = response.headers.get('Content-Disposition');
                     if (disposition && disposition.indexOf('attachment') !== -1) {
                         const filenameMatch = disposition.match(/filename="?(.+)"?/);
@@ -343,29 +344,25 @@
                         }
                     }
 
-                    // 3. Создаем временную ссылку (URL) для Blob'а
                     const tempUrl = window.URL.createObjectURL(blob);
-                    
-                    // 4. Создаем невидимый элемент <a> для инициирования скачивания
                     const a = document.createElement('a');
                     a.style.display = 'none';
                     a.href = tempUrl;
                     a.download = filename; 
                     
                     document.body.appendChild(a);
-                    a.click(); // 5. Инициируем скачивание
+                    a.click(); 
                     
-                    // 6. Очищаем за собой
                     window.URL.revokeObjectURL(tempUrl); 
                     a.remove();
                     
                     displayMessage(`Документ ID ${docId} успешно загружен как ${filename}. Проверьте папку загрузок.`, false);
 
                 } else if (response.status === 401 || response.status === 403) {
-                    displayMessage('Ошибка авторизации (401/403). Убедитесь, что ваш токен действителен или у вас есть права Куратора/Преподавателя.', true);
+                    displayMessage('Ошибка авторизации (401/403). Убедитесь, что у вас есть права.', true);
                 } else {
-                    const errorText = await response.text();
-                    displayMessage(`Ошибка загрузки: ${response.status} ${response.statusText}. Сервер: ${errorText.substring(0, 100)}...`, true);
+                    const errorJson = await response.json();
+                    displayMessage(`Ошибка загрузки: ${response.status} ${response.statusText}. Сервер: ${errorJson.message}`, true);
                 }
 
             } catch (error) {
@@ -374,8 +371,9 @@
             }
         }
 
-        // --- ЛОГИКА: ФУНКЦИЯ ПРОСМОТРА ВСЕХ ПОЛЬЗОВАТЕЛЕЙ (КУРАТОР) ---
+        // --- ЛОГИКА: ФУНКЦИЯ ПРОСМОТРА ВСЕХ ПОЛЬЗОВАТЕЛЕЙ (КУРАТОР) (Без изменений) ---
         async function fetchUsers() {
+            // ... (fetchUsers logic)
             usersTableContainer.innerHTML = 'Загрузка...';
             const token = localStorage.getItem('authToken');
 
@@ -417,8 +415,9 @@
             }
         }
 
-        // --- НОВАЯ ЛОГИКА: ФУНКЦИЯ ПРОСМОТРА ВСЕХ ДОКУМЕНТОВ (КУРАТОР) ---
+        // --- ЛОГИКА: ФУНКЦИЯ ПРОСМОТРА ВСЕХ ДОКУМЕНТОВ (КУРАТОР) (Без изменений) ---
         async function fetchCuratorDocuments() {
+            // ... (fetchCuratorDocuments logic)
             allDocsList.innerHTML = 'Загрузка всех документов...';
             const token = localStorage.getItem('authToken');
 
@@ -453,10 +452,17 @@
                     `;
                     
                     data.documents.forEach(doc => {
-                        const isFilled = doc.status === 'Заполнено';
+                        const isReady = doc.status === 'Готов к утверждению куратором';
                         const createdAt = new Date(doc.created_at).toLocaleDateString('ru-RU', { 
                             year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' 
                         });
+                        
+                        // Добавление цветов для Куратора
+                        let statusColor = 'gray';
+                        if (doc.status === 'Ожидает заполнения') statusColor = 'orange';
+                        if (doc.status === 'Ожидает проверки преподавателем') statusColor = 'blue';
+                        if (doc.status === 'Отправлено на доработку') statusColor = 'red';
+                        if (doc.status === 'Готов к утверждению куратором') statusColor = 'green';
                         
                         html += `
                             <tr>
@@ -464,10 +470,10 @@
                                 <td>${doc.title}</td>
                                 <td>${doc.teacher_name}</td>
                                 <td>${doc.student_email}</td>
-                                <td><span style="font-weight: bold; color: ${isFilled ? 'green' : 'orange'};">${doc.status}</span></td>
+                                <td><span style="font-weight: bold; color: ${statusColor};">${doc.status}</span></td>
                                 <td>${createdAt}</td>
                                 <td>
-                                    ${isFilled 
+                                    ${isReady 
                                         ? `<button 
                                              onclick="downloadDocument(${doc.id})" 
                                              style="background-color: #ffc107; padding: 5px 10px; width: auto; margin: 0;">Скачать</button>` 
@@ -492,16 +498,16 @@
                 displayMessage('Ошибка сети при загрузке данных документов.', true);
             }
         }
-        // --- КОНЕЦ НОВОЙ ЛОГИКИ ДЛЯ КУРАТОРА ---
 
 
-        // --- ЛОГИКА: ГЕНЕРАЦИЯ ФОРМЫ ДЛЯ ПРЕПОДАВАТЕЛЯ (Создание документа) ---
+        // --- ЛОГИКА: ГЕНЕРАЦИЯ ФОРМЫ ДЛЯ ПРЕПОДАВАТЕЛЯ (Создание документа) (Без изменений) ---
         docTemplateNameSelect.addEventListener('change', () => {
             const templateName = docTemplateNameSelect.value;
             showTeacherForm(templateName);
         });
 
         function showTeacherForm(templateName) {
+            // ... (showTeacherForm logic)
             teacherCreationArea.innerHTML = ''; 
             
             if (!templateName) return;
@@ -550,8 +556,9 @@
             document.getElementById('document-create-form').addEventListener('submit', handleTeacherFormSubmit);
         }
 
-        // --- ЛОГИКА: ОБРАБОТЧИК ОТПРАВКИ ФОРМЫ ПРЕПОДАВАТЕЛЯ (Создание документа) ---
+        // --- ЛОГИКА: ОБРАБОТЧИК ОТПРАВКИ ФОРМЫ ПРЕПОДАВАТЕЛЯ (Создание документа) (Без изменений) ---
         async function handleTeacherFormSubmit(e) {
+            // ... (handleTeacherFormSubmit logic)
             e.preventDefault();
             
             const form = e.target;
@@ -597,7 +604,56 @@
             }
         }
         
-        // --- ЛОГИКА: ФУНКЦИЯ ПРОСМОТРА ВСЕХ ДОКУМЕНТОВ (ПРЕПОДАВАТЕЛЬ) ---
+        // --- ЛОГИКА: ОБРАБОТЧИК ДЕЙСТВИЙ ПРЕПОДАВАТЕЛЯ (НОВАЯ ФУНКЦИЯ) ---
+        async function handleTeacherAction(docId, action) {
+            const token = localStorage.getItem('authToken');
+            const card = document.querySelector(`.document-card[data-doc-id="${docId}"]`);
+            
+            if (!card) return;
+
+            const teacherData = {};
+            // Собираем данные из полей преподавателя, которые могли быть заполнены на этом шаге
+            const teacherInputs = card.querySelectorAll('.teacher-action-block input[data-role="Преподаватель"]');
+            teacherInputs.forEach(input => {
+                if (input.name) {
+                    teacherData[input.name] = input.value;
+                }
+            });
+            
+            const comment = card.querySelector(`#teacher-comment-${docId}`).value;
+            
+            if (action === 'reject' && (!comment || comment.trim() === '')) {
+                displayMessage('Комментарий обязателен для отправки на доработку.', true);
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_URL}/documents/teacher/action/${docId}`, {
+                    method: 'PUT',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}` 
+                    },
+                    body: JSON.stringify({ action, teacherData, comment }) 
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.success) {
+                    displayMessage(data.message, false);
+                    fetchTeacherDocuments(); // Обновить список
+                } else {
+                    displayMessage(data.message || 'Ошибка выполнения действия.', true);
+                }
+
+            } catch (error) {
+                console.error('Ошибка сети при выполнении действия преподавателя:', error);
+                displayMessage('Ошибка сети при выполнении действия.', true);
+            }
+        }
+
+
+        // --- ЛОГИКА: ФУНКЦИЯ ПРОСМОТРА ВСЕХ ДОКУМЕНТОВ (ПРЕПОДАВАТЕЛЬ) (ОБНОВЛЕН) ---
         async function fetchTeacherDocuments() {
             teacherDocsList.innerHTML = 'Загрузка документов...';
             const token = localStorage.getItem('authToken');
@@ -621,16 +677,20 @@
                     data.documents.forEach(doc => {
                         const card = document.createElement('div');
                         card.className = 'document-card teacher-card';
+                        card.dataset.docId = doc.id; // Добавляем ID для удобства поиска
                         
                         card.innerHTML = `
                             <h4>${doc.title} (Студент: ${doc.student_email})</h4>
                             <p>Статус: <strong>${doc.status}</strong> (ID: ${doc.id})</p>
+                            ${doc.teacher_comment ? `<div class="rejection-comment">Комментарий к доработке: ${doc.teacher_comment}</div>` : ''}
                             <div class="document-content-${doc.id}" style="line-height: 2.2;"></div>
                         `;
 
                         const contentDiv = card.querySelector(`.document-content-${doc.id}`);
                         const prefilledData = doc.submitted_data || {};
                         
+                        let remainingTeacherFields = [];
+
                         doc.template.parts.forEach(part => {
                             const partContainer = document.createElement('span');
                             partContainer.className = 'doc-part';
@@ -643,23 +703,55 @@
                                                     : '';
 
                                 let displayClass = 'prefilled';
-                                if (part.role === 'Преподаватель') {
-                                    displayClass = 'prefilled'; 
-                                } else if (part.role === 'Студент') {
-                                    displayClass = 'prefilled student-data'; 
-                                }
-                                
-                                // ИСПРАВЛЕННАЯ СТРОКА: добавлена проверка на part.role
-                                const displayValue = fieldValue || `[НЕ ЗАПОЛНЕН ${part.role ? part.role.toUpperCase() : 'ПОЛЕ'}]`; 
+                                let displayValue = fieldValue || `[НЕ ЗАПОЛНЕН ${part.role ? part.role.toUpperCase() : 'ПОЛЕ'}]`; 
 
+                                if (part.role === 'Студент') {
+                                    displayClass = 'prefilled student-data'; 
+                                } 
+                                
                                 partContainer.innerHTML = `<span class="${displayClass}">${displayValue}</span>`;
+
+                                // Если документ ожидает проверки, и это поле преподавателя (которое еще не заполнено)
+                                if (doc.status === 'Ожидает проверки преподавателем' && part.role === 'Преподаватель' && !fieldValue) {
+                                    remainingTeacherFields.push(part);
+                                }
                             }
 
                             contentDiv.appendChild(partContainer);
                             contentDiv.innerHTML += '&nbsp;'; 
                         });
                         
-                        if (doc.status === 'Заполнено') {
+                        // --- БЛОК ДЕЙСТВИЙ ПРЕПОДАВАТЕЛЯ ---
+                        if (doc.status === 'Ожидает проверки преподавателем') {
+                            const actionBlock = document.createElement('div');
+                            actionBlock.className = 'teacher-action-block';
+                            actionBlock.innerHTML = `
+                                <h5>Действие по документу ID: ${doc.id}</h5>
+                                <p style="font-weight: bold; color: #007bff;">Студент заполнил свою часть. Проверьте и примите решение.</p>
+                                
+                                ${remainingTeacherFields.length > 0 ? `
+                                    <h6 style="margin-top: 10px; margin-bottom: 5px;">Заполнить оставшиеся поля:</h6>
+                                    ${remainingTeacherFields.map(field => `
+                                        <input type="text" 
+                                               name="${field.name}" 
+                                               placeholder="Заполните: ${field.name}" 
+                                               data-role="Преподаватель" 
+                                               style="width: 100%; margin-bottom: 5px;">
+                                    `).join('')}
+                                    <hr style="margin: 15px 0;">
+                                ` : ''}
+
+                                <h6 style="margin-top: 10px; margin-bottom: 5px;">Комментарий для доработки (обязателен при отклонении):</h6>
+                                <textarea id="teacher-comment-${doc.id}" rows="2" placeholder="Введите комментарий, если отправляете студенту на доработку."></textarea>
+                                
+                                <div class="action-buttons">
+                                    <button onclick="handleTeacherAction(${doc.id}, 'reject')" style="background-color: #dc3545;">Отправить на доработку</button>
+                                    <button onclick="handleTeacherAction(${doc.id}, 'approve')" style="background-color: #28a745;">Отправить Куратору на утверждение</button>
+                                </div>
+                            `;
+                            card.appendChild(actionBlock);
+
+                        } else if (doc.status === 'Готов к утверждению куратором') {
                             const downloadBtn = document.createElement('button');
                             downloadBtn.textContent = 'Скачать Документ';
                             downloadBtn.style.cssText = 'width: auto; margin-left: 0; margin-top: 10px; background-color: #ffc107;'; 
@@ -682,7 +774,7 @@
             }
         }
 
-        // --- ЛОГИКА: ФУНКЦИЯ ПРОСМОТРА ДОКУМЕНТОВ (СТУДЕНТ) ---
+        // --- ЛОГИКА: ФУНКЦИЯ ПРОСМОТРА ДОКУМЕНТОВ (СТУДЕНТ) (ОБНОВЛЕН) ---
         async function fetchStudentDocuments() {
             studentDocsList.innerHTML = 'Загрузка документов...';
             const token = localStorage.getItem('authToken');
@@ -696,17 +788,35 @@
                 const data = await response.json();
 
                 if (response.ok && data.success) {
-                    if (data.documents.length === 0) {
-                        studentDocsList.innerHTML = '<p>Нет документов, ожидающих заполнения.</p>';
+                    const activeDocs = data.documents.filter(doc => doc.status === 'Ожидает заполнения' || doc.status === 'Отправлено на доработку');
+
+                    if (activeDocs.length === 0) {
+                        studentDocsList.innerHTML = '<p>Нет документов, ожидающих заполнения или доработки.</p>';
                         return;
                     }
 
                     studentDocsList.innerHTML = '';
-                    data.documents.forEach(doc => {
+                    activeDocs.forEach(doc => {
                         const card = document.createElement('div');
                         card.className = 'document-card';
-                        card.innerHTML = `<h4>${doc.title} (ID: ${doc.id})</h4>`;
+                        
+                        let statusText = `Статус: <strong>${doc.status}</strong> (ID: ${doc.id})`;
+                        if (doc.status === 'Отправлено на доработку') {
+                            statusText += `<br><div class="rejection-comment">
+                                <strong>Требуется доработка! Комментарий преподавателя:</strong> ${doc.teacher_comment}
+                            </div>`;
+                        }
 
+                        card.innerHTML = `<h4>${doc.title}</h4>${statusText}`;
+
+                        // Если документ на проверке у препода, показываем его в read-only виде
+                        if (doc.status === 'Ожидает проверки преподавателем') {
+                            card.innerHTML += `<p style="color: blue; font-weight: bold;">Документ на проверке у преподавателя. Ожидайте дальнейших инструкций.</p>`;
+                            studentDocsList.appendChild(card);
+                            return;
+                        }
+
+                        // Если документ ожидает заполнения или на доработке, показываем форму
                         const form = document.createElement('form');
                         form.dataset.docId = doc.id;
                         form.className = 'document-form';
@@ -720,26 +830,25 @@
                             if (part.type === 'text') {
                                 partContainer.innerHTML = part.content;
                             } else if (part.type === 'input') {
-                                const isPrefilled = prefilledData[part.name] !== undefined && prefilledData[part.name] !== '';
+                                const fieldValue = prefilledData[part.name] !== undefined 
+                                                    ? prefilledData[part.name] 
+                                                    : '';
 
-                                if (isPrefilled && part.role === 'Преподаватель') {
-                                    partContainer.innerHTML = `<span class="prefilled" style="background-color: #e6f0ff;">${prefilledData[part.name]}</span>`;
-                                } 
-                                else if (part.role === 'Студент') {
-                                    if (isPrefilled) {
-                                        partContainer.innerHTML = `<span class="prefilled">${prefilledData[part.name]}</span>`;
-                                    } else {
-                                        const input = document.createElement('input');
-                                        input.type = 'text';
-                                        input.name = part.name;
-                                        input.placeholder = `[Ваш ввод: ${part.name}]`;
-                                        input.required = true; 
-                                        
-                                        partContainer.appendChild(input);
-                                    }
+                                const isStudentRole = part.role === 'Студент';
+                                
+                                if (isStudentRole) {
+                                    const input = document.createElement('input');
+                                    input.type = 'text';
+                                    input.name = part.name;
+                                    input.placeholder = `[Ваш ввод: ${part.name}]`;
+                                    input.required = true; 
+                                    input.value = fieldValue; // Сохраняем предыдущий ввод
+                                    partContainer.appendChild(input);
                                 }
-                                else if (part.role === 'Преподаватель' && !isPrefilled) {
-                                    partContainer.innerHTML = `<span style="color: red; border: 1px solid red; padding: 5px;">[ОЖИДАЕТСЯ ВВОД ПРЕПОДАВАТЕЛЯ]</span>`;
+                                else if (part.role === 'Преподаватель') {
+                                     const displayClass = 'prefilled';
+                                     const displayValue = fieldValue || `[ОЖИДАЕТСЯ ВВОД ПРЕПОДАВАТЕЛЯ]`;
+                                     partContainer.innerHTML = `<span class="${displayClass}" style="background-color: #e6f0ff;">${displayValue}</span>`;
                                 }
                             }
 
@@ -749,7 +858,7 @@
 
                         const submitBtn = document.createElement('button');
                         submitBtn.type = 'submit';
-                        submitBtn.textContent = 'Отправить Заполненный Документ';
+                        submitBtn.textContent = doc.status === 'Отправлено на доработку' ? 'Переотправить на проверку' : 'Отправить Заполненный Документ';
                         submitBtn.style.width = 'auto';
                         form.appendChild(submitBtn);
 
@@ -762,7 +871,6 @@
                             doc.template.parts.forEach(part => {
                                 if (part.type === 'input') {
                                     const fieldName = part.name;
-                                    const prefilledValue = prefilledData[fieldName]; 
                                     const inputElement = form.querySelector(`input[name="${fieldName}"]`); 
                                     
                                     let currentValue;
@@ -770,7 +878,8 @@
                                     if (inputElement) {
                                         currentValue = inputElement.value.trim();
                                     } else {
-                                        currentValue = prefilledValue;
+                                        // Если поле не для студента (Преподавателя) или уже заполнено, берем старое значение
+                                        currentValue = prefilledData[fieldName];
                                     }
                                     
                                     if (part.role === 'Студент' && (!currentValue || currentValue.trim() === '')) {
@@ -808,7 +917,7 @@
         }
 
 
-        // --- ЛОГИКА: ФУНКЦИЯ ОТПРАВКИ ЗАПОЛНЕННОГО ДОКУМЕНТА (СТУДЕНТ) ---
+        // --- ЛОГИКА: ФУНКЦИЯ ОТПРАВКИ ЗАПОЛНЕННОГО ДОКУМЕНТА (СТУДЕНТ) (Без изменений, кроме текста сообщения) ---
         async function submitStudentDocument(docId, studentData) {
             const token = localStorage.getItem('authToken');
 
@@ -827,6 +936,7 @@
                 if (response.ok && data.success) {
                     displayMessage(data.message, false);
                     fetchStudentDocuments(); 
+                    fetchTeacherDocuments(); // Обновить список преподавателя, если он открыт
                 } else {
                     displayMessage(data.message || 'Ошибка отправки документа.', true); 
                 }
@@ -947,7 +1057,6 @@
         showUsersBtn.addEventListener('click', fetchUsers); 
         showStudentDocsBtn.addEventListener('click', fetchStudentDocuments); 
         showTeacherDocsBtn.addEventListener('click', fetchTeacherDocuments); 
-        // НОВЫЙ ОБРАБОТЧИК ДЛЯ КУРАТОРА
         showAllDocsBtn.addEventListener('click', fetchCuratorDocuments); 
 
         // Проверяем статус при загрузке страницы
