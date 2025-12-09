@@ -6,7 +6,7 @@
     <title>Портал ВУЗа</title>
     <style>
         body { font-family: sans-serif; padding: 20px; background-color: #f4f4f9; }
-        .container { max-width: 900px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .container { max-width: 900px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0 0 0 / 10%); }
         h1 { text-align: center; color: #333; }
         /* Общие стили для полей ввода */
         input[type="text"], input[type="email"], input[type="password"], select { width: 100%; padding: 10px; margin: 8px 0; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
@@ -33,7 +33,7 @@
         #curator-docs-container th, #curator-docs-container td { border: 1px solid #ddd; padding: 8px; text-align: left; font-size: 0.8em; word-break: break-all;}
 
         /* Стили для карточек документов */
-        .document-card { border: 1px solid #ccc; padding: 10px; margin-bottom: 15px; border-radius: 6px; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+        .document-card { border: 1px solid #ccc; padding: 10px; margin-bottom: 15px; border-radius: 6px; background: #fff; box-shadow: 0 1px 3px rgba(0 0 0 / 5%); }
         .document-card h4 { margin-top: 0; }
         .document-card .doc-part { display: inline-block; padding: 0; margin: 0; line-height: 2.2; }
         .document-card input[type="text"] { margin-bottom: 5px; width: auto; display: inline-block; padding: 5px; }
@@ -169,8 +169,8 @@
         const showStudentDocsBtn = document.getElementById('show-student-docs-btn');
         const studentDocsList = document.getElementById('student-docs-list');
         const teacherCreationArea = document.getElementById('teacher-document-creation-area');
-        const showTeacherDocsBtn = document.getElementById('show-teacher-docs-btn');
-        const teacherDocsList = document.getElementById('teacher-docs-list');
+        const showTeacherDocsBtn = document.getElementById('show-teacher-docs-btn'); 
+        const teacherDocsList = document.getElementById('teacher-docs-list'); 
         
         // --- СПИСОК ШАБЛОНОВ (Должен соответствовать server.js) ---
         const templateParts = {
@@ -299,13 +299,13 @@
 
                     if (data.userRole === 'Куратор') {
                          curatorPanel.classList.remove('hidden');
-                         fetchCuratorDocuments(); // Автоматическая загрузка
+                         fetchCuratorDocuments(); 
                     } else if (data.userRole === 'Преподаватель') {
                          teacherPanel.classList.remove('hidden');
-                         fetchTeacherDocuments(); 
+                         fetchTeacherDocuments(); // Автоматическая загрузка
                     } else if (data.userRole === 'Студент') {
                          studentPanel.classList.remove('hidden');
-                         fetchStudentDocuments(); 
+                         fetchStudentDocuments(); // Автоматическая загрузка
                     }
 
                 } else if (response.status === 403 || response.status === 401) {
@@ -322,7 +322,7 @@
             }
         }
         
-        // --- НОВАЯ ЛОГИКА: ФУНКЦИЯ ПРОСМОТРА ВСЕХ ДОКУМЕНТОВ (КУРАТОР) ---
+        // --- ЛОГИКА: ФУНКЦИЯ ПРОСМОТРА ВСЕХ ДОКУМЕНТОВ (КУРАТОР) ---
         async function fetchCuratorDocuments() {
             curatorDocsContainer.innerHTML = 'Загрузка всех документов...';
             const token = localStorage.getItem('authToken');
@@ -341,7 +341,7 @@
                         return;
                     }
 
-                    let html = '<table><thead><tr><th>ID</th><th>Заголовок</th><th>Студент</th><th>Статус</th><th>Преподаватель ID</th><th>Данные</th></tr></thead><tbody>';
+                    let html = '<table><thead><tr><th>ID</th><th>Заголовок</th><th>Студент</th><th>Статус</th><th>Преподаватель ID</th><th>Данные (JSON)</th></tr></thead><tbody>';
                     
                     data.documents.forEach(doc => {
                         // Ограничиваем показ данных для таблицы
@@ -379,7 +379,6 @@
         
         // --- ЛОГИКА: ФУНКЦИЯ ПРОСМОТРА ВСЕХ ПОЛЬЗОВАТЕЛЕЙ (КУРАТОР) ---
         async function fetchUsers() {
-            // ... (без изменений)
             usersTableContainer.innerHTML = 'Загрузка...';
             const token = localStorage.getItem('authToken');
 
@@ -563,9 +562,9 @@
                         const prefilledData = doc.submitted_data || {};
                         
                         let finalizeFormHTML = isAwaitingFinalization ? `<form data-doc-id="${doc.id}" class="finalize-form" style="margin-top: 15px; border-top: 1px dashed #dc3545; padding-top: 10px;">
-                                <p style="font-weight: bold; color: #dc3545;">Внимание! Документ заполнен студентом и ожидает вашей финальной проверки и заполнения полей, необходимых для утверждения:</p>` : '';
+                                <p style="font-weight: bold; color: #dc3545;">Внимание! Документ заполнен студентом и ожидает вашей финальной проверки и заполнения полей:</p>` : '';
                         
-                        let needsFinalization = false; // Флаг, что есть поля для финального ввода
+                        let needsFinalization = false; 
                         
                         // Генерация полного документа для просмотра / финального заполнения
                         doc.template.parts.forEach(part => {
@@ -580,7 +579,11 @@
                                                     : '';
 
                                 let displayClass = 'prefilled';
-                                let displayValue = fieldValue || `[НЕ ЗАПОЛНЕН ${part.role.toUpperCase()}]`;
+                                
+                                // 🟢 ИСПРАВЛЕНИЕ: Проверяем part.role перед вызовом toUpperCase()
+                                const roleName = part.role ? part.role.toUpperCase() : 'РОЛЬ НЕ УКАЗАНА';
+                                let displayValue = fieldValue || `[НЕ ЗАПОЛНЕН ${roleName}]`; 
+                                // -------------------------------------------------------------
 
                                 if (part.role === 'Студент') {
                                     displayClass = 'prefilled student-data'; 
@@ -655,7 +658,8 @@
             
             inputs.forEach(input => {
                 if(input.name) { 
-                    if (!input.value.trim()) {
+                    // Проверяем только те, которые отображаются в форме финализации
+                    if (input.classList.contains('finalize-form-input') && !input.value.trim()) {
                          allRequiredFilled = false;
                     }
                     finalTeacherData[input.name] = input.value;
@@ -682,6 +686,7 @@
                 if (response.ok && data.success) {
                     displayMessage(data.message, false); 
                     fetchTeacherDocuments(); // Обновить список после финализации
+                    fetchCuratorDocuments(); // Обновить список Куратора
                 } else {
                     displayMessage(data.message || 'Ошибка финализации документа.', true);
                 }
@@ -740,12 +745,15 @@
                                 partContainer.innerHTML = part.content;
                             } else if (part.type === 'input') {
                                 const isPrefilled = prefilledData[part.name] !== undefined && prefilledData[part.name] !== '';
-
-                                if (isPrefilled && part.role !== 'Студент') {
+                                
+                                // 🟢 ИСПРАВЛЕНИЕ: Добавляем проверку для стабильности
+                                const roleCheck = part.role ? part.role : 'Студент'; // Если роль отсутствует, по умолчанию считаем полем Студента
+                                
+                                if (isPrefilled && roleCheck !== 'Студент') {
                                     // Поле преподавателя, заполненное на любом этапе
                                     partContainer.innerHTML = `<span class="prefilled" style="background-color: #e6f0ff;">${prefilledData[part.name]}</span>`;
                                 } 
-                                else if (isAwaitingFill && part.role === 'Студент') {
+                                else if (isAwaitingFill && roleCheck === 'Студент') {
                                     // Поле студента, ожидающее заполнения
                                     const input = document.createElement('input');
                                     input.type = 'text';
@@ -759,7 +767,7 @@
                                 }
                                 else if (!isAwaitingFill && isPrefilled) {
                                     // Заполненное поле студента после отправки
-                                    const displayClass = part.role === 'Студент' ? 'prefilled student-data' : 'prefilled';
+                                    const displayClass = roleCheck === 'Студент' ? 'prefilled student-data' : 'prefilled';
                                     partContainer.innerHTML = `<span class="${displayClass}">${prefilledData[part.name]}</span>`;
                                 }
                                 else if (!isPrefilled) {
@@ -781,15 +789,15 @@
                         } else {
                             const infoDiv = document.createElement('div');
                             infoDiv.style.marginTop = '10px';
-                            infoDiv.innerHTML = `<p style="color: #28a745; font-style: italic;">Данные отправлены. Ожидайте финальной проверки Преподавателя.</p>`;
+                            infoDiv.innerHTML = `<p style="color: ${doc.status === 'Завершено' ? '#0f5132' : '#28a745'}; font-style: italic;">Данные отправлены. Статус: ${doc.status}</p>`;
                             form.appendChild(infoDiv);
                         }
 
-                        // Логика отправки для студента (без изменений в принципе сбора данных)
+                        // Логика отправки для студента
                         form.addEventListener('submit', async (e) => {
                             e.preventDefault();
                             
-                            if (!isAwaitingFill) return; // Не отправляем, если уже заполнено
+                            if (!isAwaitingFill) return; 
 
                             let allRequiredFilled = true;
                             const studentSubmissionData = {}; 
@@ -808,6 +816,7 @@
                                         currentValue = prefilledValue;
                                     }
                                     
+                                    // Дополнительная проверка, чтобы убедиться, что поле студента заполнено
                                     if (part.role === 'Студент' && (!currentValue || currentValue.trim() === '')) {
                                         allRequiredFilled = false;
                                     }
@@ -873,7 +882,7 @@
         }
 
 
-        // ... (Аутентификация и управление ролями - без изменений)
+        // ... (Аутентификация и управление ролями)
         registerForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             const name = document.getElementById('register-name').value;
@@ -976,12 +985,12 @@
             }
         }
 
-        // Обработчики событий
+        // Обработчики событий (ИСПРАВЛЕНО: showTeacherDocsBtn привязан к fetchTeacherDocuments)
         logoutButton.addEventListener('click', () => logout(true));
         showLoginBtn.addEventListener('click', () => showForm('login'));
         showRegisterBtn.addEventListener('click', () => showForm('register'));
         showUsersBtn.addEventListener('click', fetchUsers); 
-        showCuratorDocsBtn.addEventListener('click', fetchCuratorDocuments); // НОВЫЙ
+        showCuratorDocsBtn.addEventListener('click', fetchCuratorDocuments);
         showStudentDocsBtn.addEventListener('click', fetchStudentDocuments); 
         showTeacherDocsBtn.addEventListener('click', fetchTeacherDocuments); 
 
