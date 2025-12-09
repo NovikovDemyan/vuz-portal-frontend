@@ -6,7 +6,7 @@
     <title>Портал ВУЗа</title>
     <style>
         body { font-family: sans-serif; padding: 20px; background-color: #f4f4f9; }
-        .container { max-width: 900px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0 0 0 / 10%); }
+        .container { max-width: 900px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
         h1 { text-align: center; color: #333; }
         /* Общие стили для полей ввода */
         input[type="text"], input[type="email"], input[type="password"], select { width: 100%; padding: 10px; margin: 8px 0; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
@@ -33,13 +33,13 @@
         #curator-docs-container th, #curator-docs-container td { border: 1px solid #ddd; padding: 8px; text-align: left; font-size: 0.8em; word-break: break-all;}
 
         /* Стили для карточек документов */
-        .document-card { border: 1px solid #ccc; padding: 10px; margin-bottom: 15px; border-radius: 6px; background: #fff; box-shadow: 0 1px 3px rgba(0 0 0 / 5%); }
+        .document-card { border: 1px solid #ccc; padding: 10px; margin-bottom: 15px; border-radius: 6px; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
         .document-card h4 { margin-top: 0; }
         .document-card .doc-part { display: inline-block; padding: 0; margin: 0; line-height: 2.2; }
         .document-card input[type="text"] { margin-bottom: 5px; width: auto; display: inline-block; padding: 5px; }
         .document-card button { width: auto; margin-left: 10px; margin-top: 5px; padding: 8px 12px; }
         /* Стиль для заполненных данных */
-        .document-card .prefilled { font-weight: bold; padding: 5px 8px; border-radius: 4px; border: 1px dashed gray; background-color: #e0f0e0;} 
+        .document-card .prefilled { font-weight: bold; padding: 5px 8px; border-radius: 4px; border: 1px dashed gray; background-color: #e0f0f0;} 
         .teacher-form-fields { margin-top: 15px; border-top: 1px dashed #28a745; padding-top: 10px; }
 
         /* Стили для просмотра преподавателем */
@@ -580,10 +580,8 @@
 
                                 let displayClass = 'prefilled';
                                 
-                                // 🟢 ИСПРАВЛЕНИЕ: Проверяем part.role перед вызовом toUpperCase()
                                 const roleName = part.role ? part.role.toUpperCase() : 'РОЛЬ НЕ УКАЗАНА';
                                 let displayValue = fieldValue || `[НЕ ЗАПОЛНЕН ${roleName}]`; 
-                                // -------------------------------------------------------------
 
                                 if (part.role === 'Студент') {
                                     displayClass = 'prefilled student-data'; 
@@ -617,6 +615,7 @@
                             contentDiv.innerHTML += '&nbsp;'; 
                         });
                         
+                        // Добавляем форму финализации, если она нужна
                         if (isAwaitingFinalization) {
                             finalizeFormHTML += '<button type="submit" style="background-color: #dc3545;">Утвердить и Завершить Документ</button></form>';
                             contentDiv.innerHTML += finalizeFormHTML;
@@ -671,6 +670,13 @@
                 return;
             }
 
+            // 🟢 ИСПРАВЛЕНИЕ ОШИБКИ 400: Если нет полей для заполнения, 
+            // объект данных будет пустым, что вызовет 400 на сервере.
+            // Добавляем техническое поле, чтобы сервер принял запрос на смену статуса
+            if (Object.keys(finalTeacherData).length === 0) {
+                finalTeacherData['Finalized_Time'] = new Date().toISOString();
+            }
+
             try {
                 const response = await fetch(`${API_URL}/documents/finalize/${docId}`, {
                     method: 'PUT',
@@ -688,7 +694,7 @@
                     fetchTeacherDocuments(); // Обновить список после финализации
                     fetchCuratorDocuments(); // Обновить список Куратора
                 } else {
-                    displayMessage(data.message || 'Ошибка финализации документа.', true);
+                    displayMessage(data.message || 'Ошибка финализации документа.', true); 
                 }
 
             } catch (error) {
@@ -746,7 +752,6 @@
                             } else if (part.type === 'input') {
                                 const isPrefilled = prefilledData[part.name] !== undefined && prefilledData[part.name] !== '';
                                 
-                                // 🟢 ИСПРАВЛЕНИЕ: Добавляем проверку для стабильности
                                 const roleCheck = part.role ? part.role : 'Студент'; // Если роль отсутствует, по умолчанию считаем полем Студента
                                 
                                 if (isPrefilled && roleCheck !== 'Студент') {
@@ -985,7 +990,7 @@
             }
         }
 
-        // Обработчики событий (ИСПРАВЛЕНО: showTeacherDocsBtn привязан к fetchTeacherDocuments)
+        // Обработчики событий
         logoutButton.addEventListener('click', () => logout(true));
         showLoginBtn.addEventListener('click', () => showForm('login'));
         showRegisterBtn.addEventListener('click', () => showForm('register'));
