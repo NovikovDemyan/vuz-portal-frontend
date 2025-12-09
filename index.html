@@ -312,7 +312,7 @@
             }
         }
         
-        // --- ЛОГИКА: ФУНКЦИЯ СКАЧИВАНИЯ ДОКУМЕНТА (КУРАТОР/ПРЕПОДАВАТЕЛЬ) ---
+        // --- ЛОГИКА: ФУНКЦИЯ СКАЧИВАНИЯ ДОКУМЕНТА (КУРАТОР) ---
         async function downloadDocument(docId) {
             const token = localStorage.getItem('authToken');
             const url = `${API_URL}/documents/download/${docId}`;
@@ -532,6 +532,56 @@
                 displayMessage('Ошибка сети при создании документа.', true);
             }
         }
+
+        // --- ЛОГИКА: ОБРАБОТЧИК ОТПРАВКИ ФОРМЫ ПРЕПОДАВАТЕЛЯ (Утверждение) ---
+        async function handleTeacherReviewSubmit(docId, cardElement) {
+            const token = localStorage.getItem('authToken');
+            const reviewData = {};
+            
+            // Сбор данных только из активных полей ввода, которые видит Преподаватель (его поля)
+            const inputs = cardElement.querySelectorAll('input[type="text"]'); 
+            
+            inputs.forEach(input => {
+                // Предполагаем, что все активные поля - это редактируемые поля Преподавателя
+                if (input.name && input.value.trim() !== '') {
+                    reviewData[input.name] = input.value;
+                }
+            });
+            
+            // Если Преподаватель не заполнил ни одного поля (что странно, но возможно)
+            if (Object.keys(reviewData).length === 0) {
+                 displayMessage('Вы не внесли никаких изменений в поля Преподавателя. Проверьте, что все поля заполнены.', true);
+                 // НЕ отправляем, пока не заполнены
+                 // return; 
+            }
+            
+            displayMessage('Отправка на утверждение Куратору...', false);
+
+            try {
+                // Новый PUT запрос для обновления данных и смены статуса
+                const response = await fetch(`${API_URL}/documents/review/${docId}`, {
+                    method: 'PUT',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}` 
+                    },
+                    body: JSON.stringify({ reviewData }) 
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.success) {
+                    displayMessage(data.message, false); 
+                    fetchTeacherDocuments(); // Обновить список
+                } else {
+                    displayMessage(data.message || 'Ошибка отправки на утверждение.', true);
+                }
+
+            } catch (error) {
+                console.error('Ошибка сети при отправке на утверждение:', error);
+                displayMessage('Ошибка сети при отправке на утверждение.', true);
+            }
+        }
         
         // --- ЛОГИКА: ФУНКЦИЯ ПРОСМОТРА ВСЕХ ДОКУМЕНТОВ (ПРЕПОДАВАТЕЛЬ) ---
         async function fetchTeacherDocuments() {
@@ -568,7 +618,9 @@
                         const contentDiv = card.querySelector(`.document-content-${doc.id}`);
                         const prefilledData = doc.submitted_data || {};
                         
-                        // Генерация полного документа для просмотра
+                        const isEditable = doc.status === 'Заполнено';
+
+                        // Генерация полного документа для просмотра/редактирования
                         doc.template.parts.forEach(part => {
                             const partContainer = document.createElement('span');
                             partContainer.className = 'doc-part';
@@ -581,36 +633,47 @@
                                                     ? prefilledData[part.name] 
                                                     : '';
 
-                                // !!! ИСПРАВЛЕНИЕ ОШИБКИ: Безопасный доступ к part.role !!!
                                 const role = part.role || 'НЕИЗВЕСТНАЯ_РОЛЬ';
 
-                                // Определяем класс в зависимости от роли заполняющего
-                                let displayClass = 'prefilled';
-                                if (role === 'Преподаватель') {
-                                    displayClass = 'prefilled'; // Использует стили по умолчанию
-                                } else if (role === 'Студент') {
-                                    displayClass = 'prefilled student-data'; // Использует стили для студента
-                                }
-                                
-                                // Текст, если поле пустое. Используем безопасный role.
-                                const displayValue = fieldValue || `[НЕ ЗАПОЛНЕН ${role.toUpperCase()}]`;
+                                if (role === 'Преподаватель' && isEditable) {
+                                    // *** ИЗМЕНЕНИЕ: Поля Преподавателя становятся активными для редактирования ***
+                                    partContainer.innerHTML = `
+                                        <input type="text" name="${part.name}" value="${fieldValue}" 
+                                            placeholder="Введите ${part.name} (Преподаватель)" 
+                                            style="border: 2px solid #007bff; width: auto; display: inline-block; padding: 5px; margin: 0;"
+                                            required>
+                                    `;
+                                } else {
+                                    // *** Поля Студента и поля Преподавателя в нередактируемом статусе отображаются как текст ***
+                                    let displayClass = role === 'Студент' ? 'prefilled student-data' : 'prefilled';
+                                    
+                                    // Если статус уже изменен (например, "Ожидает утверждения Куратором")
+                                    if (doc.status !== 'Заполнено' && role === 'Преподаватель') {
+                                        displayClass = 'prefilled';
+                                    }
 
-                                partContainer.innerHTML = `<span class="${displayClass}">${displayValue}</span>`;
+                                    const displayValue = fieldValue || `[НЕ ЗАПОЛНЕН ${role.toUpperCase()}]`;
+
+                                    partContainer.innerHTML = `<span class="${displayClass}">${displayValue}</span>`;
+                                }
                             }
 
                             contentDiv.appendChild(partContainer);
                             contentDiv.innerHTML += '&nbsp;'; 
                         });
                         
-                        // --- ДОБАВЛЕНИЕ КНОПКИ СКАЧИВАНИЯ ---
+                        // --- ДОБАВЛЕНИЕ КНОПКИ ОТПРАВКИ НА УТВЕРЖДЕНИЕ ---
                         if (doc.status === 'Заполнено') {
-                            const downloadBtn = document.createElement('button');
-                            downloadBtn.textContent = 'Скачать Документ';
-                            downloadBtn.style.cssText = 'width: auto; margin-left: 0; margin-top: 10px; background-color: #ffc107;'; 
-                            downloadBtn.onclick = () => downloadDocument(doc.id); 
-                            card.appendChild(downloadBtn);
+                            const submitReviewBtn = document.createElement('button');
+                            submitReviewBtn.textContent = 'Отправить Документ Куратору на Утверждение';
+                            submitReviewBtn.style.cssText = 'width: auto; margin-left: 0; margin-top: 10px; background-color: #28a745;'; 
+                            
+                            // Привязываем обработчик к карточке
+                            submitReviewBtn.onclick = () => handleTeacherReviewSubmit(doc.id, card);
+                            card.appendChild(submitReviewBtn);
                         }
-                        
+                        // Кнопка скачивания удалена
+
                         teacherDocsList.appendChild(card);
                     });
 
@@ -623,6 +686,33 @@
                 console.error('Ошибка сети при загрузке документов преподавателя:', error);
                 teacherDocsList.innerHTML = '';
                 displayMessage('Ошибка сети при загрузке данных документов.', true);
+            }
+        }
+        
+        // --- ЛОГИКА: ФУНКЦИЯ УТВЕРЖДЕНИЯ ДОКУМЕНТА (КУРАТОР) ---
+        async function approveDocument(docId) {
+            const token = localStorage.getItem('authToken');
+            
+            displayMessage(`Утверждение документа ID ${docId}...`, false);
+
+            try {
+                // Новый PUT запрос для смены статуса на 'Завершено'
+                const response = await fetch(`${API_URL}/documents/approve/${docId}`, {
+                    method: 'PUT',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.success) {
+                    displayMessage(data.message, false); 
+                    fetchCuratorDocuments(); // Обновить список
+                } else {
+                    displayMessage(data.message || 'Ошибка утверждения документа.', true);
+                }
+
+            } catch (error) {
+                displayMessage('Ошибка сети при утверждении документа.', true);
             }
         }
 
@@ -676,7 +766,7 @@
                                                     ? prefilledData[part.name] 
                                                     : '';
 
-                                // !!! ИСПРАВЛЕНИЕ ОШИБКИ: Безопасный доступ к part.role !!!
+                                // !!! Безопасный доступ к part.role !!!
                                 const role = part.role || 'НЕИЗВЕСТНАЯ_РОЛЬ';
                                 
                                 // Определяем класс в зависимости от роли заполняющего
@@ -697,11 +787,25 @@
                             contentDiv.innerHTML += '&nbsp;'; 
                         });
                         
-                        // --- ДОБАВЛЕНИЕ КНОПКИ СКАЧИВАНИЯ ---
-                        if (doc.status === 'Заполнено') {
+                        // --- ДОБАВЛЕНИЕ КНОПКИ УТВЕРЖДЕНИЯ/СКАЧИВАНИЯ (Куратор) ---
+                        if (doc.status === 'Ожидает утверждения Куратором') {
+                            const approveBtn = document.createElement('button');
+                            approveBtn.textContent = 'Утвердить Документ (Завершить)';
+                            approveBtn.style.cssText = 'width: auto; margin-left: 0; margin-top: 10px; background-color: #007bff; display: inline-block;'; 
+                            approveBtn.onclick = () => approveDocument(doc.id); 
+                            card.appendChild(approveBtn);
+                        }
+
+                        if (doc.status === 'Ожидает утверждения Куратором' || doc.status === 'Завершено') {
                             const downloadBtn = document.createElement('button');
-                            downloadBtn.textContent = 'Скачать Документ';
-                            downloadBtn.style.cssText = 'width: auto; margin-left: 0; margin-top: 10px; background-color: #ffc107;'; 
+                            downloadBtn.textContent = 'Скачать Документ (.docx)';
+                            
+                            if (doc.status === 'Ожидает утверждения Куратором') {
+                                downloadBtn.style.cssText = 'width: auto; margin-left: 10px; margin-top: 10px; background-color: #ffc107; display: inline-block;'; 
+                            } else {
+                                downloadBtn.style.cssText = 'width: auto; margin-left: 0; margin-top: 10px; background-color: #ffc107;';
+                            }
+                            
                             downloadBtn.onclick = () => downloadDocument(doc.id); 
                             card.appendChild(downloadBtn);
                         }
@@ -722,7 +826,7 @@
         }
 
 
-        // --- ЛОГИКА: ФУНКЦИЯ ПРОСМОТРА ДОКУМЕНТОВ (СТУДЕНТ) (ИСПРАВЛЕНО) ---
+        // --- ЛОГИКА: ФУНКЦИЯ ПРОСМОТРА ДОКУМЕНТОВ (СТУДЕНТ) (БЕЗ ИЗМЕНЕНИЙ) ---
         async function fetchStudentDocuments() {
             studentDocsList.innerHTML = 'Загрузка документов...';
             const token = localStorage.getItem('authToken');
@@ -752,6 +856,7 @@
                         form.className = 'document-form';
                         
                         const prefilledData = doc.submitted_data || {};
+                        const isEditable = doc.status === 'Ожидает заполнения'; // Студент может редактировать только на этом статусе
 
                         // Генерация формы на основе шаблона
                         doc.template.parts.forEach(part => {
@@ -761,34 +866,28 @@
                             if (part.type === 'text') {
                                 partContainer.innerHTML = part.content;
                             } else if (part.type === 'input') {
-                                const isPrefilled = prefilledData[part.name] !== undefined && prefilledData[part.name] !== '';
-                                // !!! ИСПРАВЛЕНИЕ ОШИБКИ: Безопасный доступ к part.role !!!
+                                const fieldValue = prefilledData[part.name] !== undefined && prefilledData[part.name] !== ''
+                                                    ? prefilledData[part.name]
+                                                    : '';
                                 const role = part.role || 'НЕИЗВЕСТНАЯ_РОЛЬ';
 
-                                // 1. Если поле уже заполнено (преподавателем)
-                                if (isPrefilled && role === 'Преподаватель') {
-                                    // Показываем как заполненный неактивный текст
-                                    partContainer.innerHTML = `<span class="prefilled" style="background-color: #e6f0ff;">${prefilledData[part.name]}</span>`;
-                                } 
-                                // 2. Если поле должно быть заполнено студентом
-                                else if (role === 'Студент') {
-                                    if (isPrefilled) {
-                                        // Если студент уже начал заполнять, показываем его ввод как заполненный, но неактивный
-                                         partContainer.innerHTML = `<span class="prefilled">${prefilledData[part.name]}</span>`;
-                                    } else {
-                                        // Иначе, показываем поле ввода (активное)
+                                // 1. Если поле должно быть заполнено студентом И статус позволяет редактировать
+                                if (role === 'Студент' && isEditable) {
                                         const input = document.createElement('input');
                                         input.type = 'text';
                                         input.name = part.name;
                                         input.placeholder = `[Ваш ввод: ${part.name}]`;
                                         input.required = true; 
+                                        input.value = fieldValue; // Сохраняем черновик
                                         
                                         partContainer.appendChild(input);
-                                    }
-                                }
-                                // 3. Если поле должно было быть заполнено преподавателем, но пропущено
-                                else if (role === 'Преподаватель' && !isPrefilled) {
-                                    partContainer.innerHTML = `<span style="color: red; border: 1px solid red; padding: 5px;">[ОЖИДАЕТСЯ ВВОД ПРЕПОДАВАТЕЛЯ]</span>`;
+                                } 
+                                // 2. Во всех остальных случаях (Поле Преподавателя, или Студент уже отправил)
+                                else {
+                                    const displayClass = role === 'Студент' ? 'prefilled' : 'prefilled';
+                                    const displayValue = fieldValue || (isEditable ? `[Требуется ввод]` : `[НЕ ЗАПОЛНЕН ${role.toUpperCase()}]`);
+
+                                    partContainer.innerHTML = `<span class="${displayClass}" style="background-color: ${role === 'Преподаватель' ? '#e6f0ff' : '#e0f0e0'};">${displayValue}</span>`;
                                 }
                             }
 
@@ -798,57 +897,64 @@
 
                         const submitBtn = document.createElement('button');
                         submitBtn.type = 'submit';
-                        submitBtn.textContent = 'Отправить Заполненный Документ';
                         submitBtn.style.width = 'auto';
+
+                        if (doc.status === 'Ожидает заполнения') {
+                           submitBtn.textContent = 'Отправить Заполненный Документ';
+                           submitBtn.style.backgroundColor = '#28a745';
+                        } else if (doc.status === 'Заполнено') {
+                            submitBtn.textContent = 'Ожидает Рецензии Преподавателя';
+                            submitBtn.disabled = true;
+                            submitBtn.style.backgroundColor = '#ffc107';
+                        } else if (doc.status === 'Ожидает утверждения Куратором') {
+                            submitBtn.textContent = 'Ожидает Утверждения Куратором';
+                            submitBtn.disabled = true;
+                            submitBtn.style.backgroundColor = '#007bff';
+                        } else if (doc.status === 'Завершено') {
+                            submitBtn.textContent = 'Документ Утвержден';
+                            submitBtn.disabled = true;
+                            submitBtn.style.backgroundColor = '#17a2b8';
+                        }
+                        
                         form.appendChild(submitBtn);
 
-                        // *** ИСПРАВЛЕННАЯ ЛОГИКА: Валидация и сбор данных из DOM ***
-                        form.addEventListener('submit', async (e) => {
-                            e.preventDefault();
-                            
-                            let allRequiredFilled = true;
-                            // Объект для отправки. Собирает все данные (новые и существующие)
-                            const studentSubmissionData = {}; 
-                            
-                            // Проходим по ВСЕМ полям ввода в шаблоне (независимо от роли)
-                            doc.template.parts.forEach(part => {
-                                if (part.type === 'input') {
-                                    const fieldName = part.name;
-                                    // !!! ИСПРАВЛЕНИЕ: БЕЗОПАСНАЯ ПРОВЕРКА РОЛИ !!!
-                                    const role = part.role || 'НЕИЗВЕСТНАЯ_РОЛЬ';
-                                    
-                                    const prefilledValue = prefilledData[fieldName]; // Значение из БД
-                                    const inputElement = form.querySelector(`input[name="${fieldName}"]`); // Активный инпут, если есть
-                                    
-                                    let currentValue;
-                                    
-                                    if (inputElement) {
-                                        // Если есть активное поле ввода (незаполненное поле студента)
-                                        currentValue = inputElement.value.trim();
-                                    } else {
-                                        // Если поля ввода нет (поле преподавателя или уже заполненное поле студента)
-                                        currentValue = prefilledValue;
+                        // Логика отправки только для статуса "Ожидает заполнения"
+                        if (doc.status === 'Ожидает заполнения') {
+                            form.addEventListener('submit', async (e) => {
+                                e.preventDefault();
+                                
+                                let allRequiredFilled = true;
+                                const studentSubmissionData = {}; 
+                                
+                                // Проходим по всем активным полям ввода в форме
+                                const activeInputs = form.querySelectorAll('input[type="text"]');
+                                
+                                activeInputs.forEach(input => {
+                                    if (input.required && input.value.trim() === '') {
+                                        allRequiredFilled = false;
                                     }
-                                    
-                                    // 1. Валидация: проверяем на заполненность ТОЛЬКО поля Студента
-                                    if (role === 'Студент' && (!currentValue || currentValue.trim() === '')) {
-                                        allRequiredFilled = false; // Обязательное поле студента не заполнено
+                                    if (input.name) {
+                                        studentSubmissionData[input.name] = input.value.trim();
                                     }
-                                    
-                                    // 2. Сбор данных для отправки: включаем все, что имеет значение (для сохранения данных Преподавателя)
-                                    if (currentValue) {
-                                        studentSubmissionData[fieldName] = currentValue;
+                                });
+                                
+                                // Добавляем в данные те поля, которые заполнил Преподаватель (они отображаются как span, но их данные есть в prefilledData)
+                                doc.template.parts.forEach(part => {
+                                    if (part.type === 'input' && (part.role === 'Преподаватель' || part.role === 'НЕИЗВЕСТНАЯ_РОЛЬ')) {
+                                        if (prefilledData[part.name] !== undefined) {
+                                            studentSubmissionData[part.name] = prefilledData[part.name];
+                                        }
                                     }
+                                });
+
+
+                                if (allRequiredFilled) {
+                                    await submitStudentDocument(doc.id, studentSubmissionData);
+                                } else {
+                                    displayMessage('Пожалуйста, заполните все обязательные поля в документе.', true);
                                 }
                             });
-                            
-                            if (allRequiredFilled) {
-                                // Отправляем объект с данными, включая все собранные поля
-                                await submitStudentDocument(doc.id, studentSubmissionData);
-                            } else {
-                                displayMessage('Пожалуйста, заполните все обязательные поля в документе.', true);
-                            }
-                        });
+                        }
 
 
                         card.appendChild(form);
@@ -873,6 +979,7 @@
             const token = localStorage.getItem('authToken');
 
             try {
+                // Обновленный API сбора данных.
                 const response = await fetch(`${API_URL}/documents/submit/${docId}`, {
                     method: 'PUT',
                     headers: { 
@@ -1008,7 +1115,7 @@
         showUsersBtn.addEventListener('click', fetchUsers); 
         showStudentDocsBtn.addEventListener('click', fetchStudentDocuments); 
         showTeacherDocsBtn.addEventListener('click', fetchTeacherDocuments); 
-        showCuratorDocsBtn.addEventListener('click', fetchCuratorDocuments); // Новый обработчик
+        showCuratorDocsBtn.addEventListener('click', fetchCuratorDocuments); 
 
         // Проверяем статус при загрузке страницы
         checkAuth();
