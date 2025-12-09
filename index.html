@@ -179,8 +179,6 @@
                 { type: "input", name: "Дата_Окончания", role: "Студент" },
                 { type: "text", content: ". Приказ о согласовании №" },
                 { type: "input", name: "Номер_Приказа_Ректора", role: "Преподаватель" },
-                { type: "text", content: " от " },
-                { type: "input", name: "Дата_Приказа_Ректора", role: "Преподаватель" }, 
                 { type: "text", content: "." }
             ],
             'Уведомление о Задолженности': [
@@ -192,8 +190,6 @@
                 { type: "input", name: "Тема_Долга", role: "Студент" },
                 { type: "text", content: ". Крайний срок сдачи до " },
                 { type: "input", name: "Крайний_Срок", role: "Преподаватель" },
-                { type: "text", content: ". Статус проверки Куратором: " },
-                { type: "input", name: "Статус_Куратора", role: "Преподаватель" },
                 { type: "text", content: "." }
             ],
             'Запрос на Смену Руководителя': [
@@ -205,8 +201,6 @@
                 { type: "input", name: "Новый_Руководитель", role: "Преподаватель" },
                 { type: "text", content: ". Причина, указанная студентом: " },
                 { type: "input", name: "Причина_Смены", role: "Студент" },
-                { type: "text", content: ". Дата утверждения: " },
-                { type: "input", name: "Дата_Утверждения_Декана", role: "Преподаватель" },
                 { type: "text", content: "." }
             ]
         };
@@ -295,7 +289,7 @@
 
                     if (data.userRole === 'Куратор') {
                          curatorPanel.classList.remove('hidden');
-                         fetchCuratorDocuments(); // Загрузка документов Куратора
+                         fetchCuratorDocuments(); 
                     } else if (data.userRole === 'Преподаватель') {
                          teacherPanel.classList.remove('hidden');
                          fetchTeacherDocuments(); 
@@ -587,11 +581,11 @@
                                                     ? prefilledData[part.name] 
                                                     : '';
 
-                                // Определяем класс в зависимости от роли заполняющего
-                                let displayClass = 'prefilled';
                                 // !!! ИСПРАВЛЕНИЕ ОШИБКИ: Безопасный доступ к part.role !!!
                                 const role = part.role || 'НЕИЗВЕСТНАЯ_РОЛЬ';
 
+                                // Определяем класс в зависимости от роли заполняющего
+                                let displayClass = 'prefilled';
                                 if (role === 'Преподаватель') {
                                     displayClass = 'prefilled'; // Использует стили по умолчанию
                                 } else if (role === 'Студент') {
@@ -609,9 +603,9 @@
                         });
                         
                         // --- ДОБАВЛЕНИЕ КНОПКИ СКАЧИВАНИЯ ---
-                        if (doc.status === 'Заполнено' || doc.status === 'Завершено') {
+                        if (doc.status === 'Заполнено') {
                             const downloadBtn = document.createElement('button');
-                            downloadBtn.textContent = 'Скачать Документ (.docx)';
+                            downloadBtn.textContent = 'Скачать Документ';
                             downloadBtn.style.cssText = 'width: auto; margin-left: 0; margin-top: 10px; background-color: #ffc107;'; 
                             downloadBtn.onclick = () => downloadDocument(doc.id); 
                             card.appendChild(downloadBtn);
@@ -631,7 +625,7 @@
                 displayMessage('Ошибка сети при загрузке данных документов.', true);
             }
         }
-        
+
         // --- ЛОГИКА: ФУНКЦИЯ ПРОСМОТРА ВСЕХ ДОКУМЕНТОВ (КУРАТОР) ---
         async function fetchCuratorDocuments() {
             curatorDocsList.innerHTML = 'Загрузка всех документов...';
@@ -682,11 +676,11 @@
                                                     ? prefilledData[part.name] 
                                                     : '';
 
-                                // Определяем класс в зависимости от роли заполняющего
-                                let displayClass = 'prefilled';
-                                // !!! Безопасный доступ к part.role !!!
+                                // !!! ИСПРАВЛЕНИЕ ОШИБКИ: Безопасный доступ к part.role !!!
                                 const role = part.role || 'НЕИЗВЕСТНАЯ_РОЛЬ';
                                 
+                                // Определяем класс в зависимости от роли заполняющего
+                                let displayClass = 'prefilled';
                                 if (role === 'Преподаватель') {
                                     displayClass = 'prefilled'; 
                                 } else if (role === 'Студент') {
@@ -704,9 +698,9 @@
                         });
                         
                         // --- ДОБАВЛЕНИЕ КНОПКИ СКАЧИВАНИЯ ---
-                        if (doc.status === 'Заполнено' || doc.status === 'Завершено') {
+                        if (doc.status === 'Заполнено') {
                             const downloadBtn = document.createElement('button');
-                            downloadBtn.textContent = 'Скачать Документ (.docx)';
+                            downloadBtn.textContent = 'Скачать Документ';
                             downloadBtn.style.cssText = 'width: auto; margin-left: 0; margin-top: 10px; background-color: #ffc107;'; 
                             downloadBtn.onclick = () => downloadDocument(doc.id); 
                             card.appendChild(downloadBtn);
@@ -778,17 +772,16 @@
                                 } 
                                 // 2. Если поле должно быть заполнено студентом
                                 else if (role === 'Студент') {
-                                    if (isPrefilled && doc.status !== 'Ожидает заполнения') {
-                                        // Если документ уже отправлен, показываем как неактивный текст
+                                    if (isPrefilled) {
+                                        // Если студент уже начал заполнять, показываем его ввод как заполненный, но неактивный
                                          partContainer.innerHTML = `<span class="prefilled">${prefilledData[part.name]}</span>`;
-                                    } else if (doc.status === 'Ожидает заполнения') {
+                                    } else {
                                         // Иначе, показываем поле ввода (активное)
                                         const input = document.createElement('input');
                                         input.type = 'text';
                                         input.name = part.name;
                                         input.placeholder = `[Ваш ввод: ${part.name}]`;
                                         input.required = true; 
-                                        input.value = prefilledData[part.name] || ''; // Сохраняем черновик
                                         
                                         partContainer.appendChild(input);
                                     }
@@ -805,66 +798,57 @@
 
                         const submitBtn = document.createElement('button');
                         submitBtn.type = 'submit';
-                        
-                        if (doc.status === 'Ожидает заполнения') {
-                           submitBtn.textContent = 'Отправить Заполненный Документ';
-                           submitBtn.style.backgroundColor = '#28a745';
-                        } else if (doc.status === 'Заполнено') {
-                            submitBtn.textContent = 'Ожидает проверки Преподавателем';
-                            submitBtn.disabled = true;
-                            submitBtn.style.backgroundColor = '#ffc107';
-                        } else if (doc.status === 'Завершено') {
-                            submitBtn.textContent = 'Документ Утвержден';
-                            submitBtn.disabled = true;
-                            submitBtn.style.backgroundColor = '#17a2b8';
-                        }
-                        
+                        submitBtn.textContent = 'Отправить Заполненный Документ';
                         submitBtn.style.width = 'auto';
                         form.appendChild(submitBtn);
 
-                        // Логика отправки только для статуса "Ожидает заполнения"
-                        if (doc.status === 'Ожидает заполнения') {
-                            form.addEventListener('submit', async (e) => {
-                                e.preventDefault();
-                                
-                                let allRequiredFilled = true;
-                                const studentSubmissionData = {}; 
-                                
-                                // Проходим по ВСЕМ полям ввода в шаблоне
-                                doc.template.parts.forEach(part => {
-                                    if (part.type === 'input') {
-                                        const fieldName = part.name;
-                                        const role = part.role || 'НЕИЗВЕСТНАЯ_РОЛЬ';
-                                        const prefilledValue = prefilledData[fieldName]; 
-                                        const inputElement = form.querySelector(`input[name="${fieldName}"]`); 
-                                        
-                                        let currentValue;
-                                        
-                                        if (inputElement) {
-                                            currentValue = inputElement.value.trim();
-                                        } else {
-                                            currentValue = prefilledValue;
-                                        }
-                                        
-                                        // 1. Валидация: проверяем на заполненность ТОЛЬКО поля Студента
-                                        if (role === 'Студент' && (!currentValue || currentValue.trim() === '')) {
-                                            allRequiredFilled = false; // Обязательное поле студента не заполнено
-                                        }
-                                        
-                                        // 2. Сбор данных для отправки
-                                        if (currentValue) {
-                                            studentSubmissionData[fieldName] = currentValue;
-                                        }
+                        // *** ИСПРАВЛЕННАЯ ЛОГИКА: Валидация и сбор данных из DOM ***
+                        form.addEventListener('submit', async (e) => {
+                            e.preventDefault();
+                            
+                            let allRequiredFilled = true;
+                            // Объект для отправки. Собирает все данные (новые и существующие)
+                            const studentSubmissionData = {}; 
+                            
+                            // Проходим по ВСЕМ полям ввода в шаблоне (независимо от роли)
+                            doc.template.parts.forEach(part => {
+                                if (part.type === 'input') {
+                                    const fieldName = part.name;
+                                    // !!! ИСПРАВЛЕНИЕ: БЕЗОПАСНАЯ ПРОВЕРКА РОЛИ !!!
+                                    const role = part.role || 'НЕИЗВЕСТНАЯ_РОЛЬ';
+                                    
+                                    const prefilledValue = prefilledData[fieldName]; // Значение из БД
+                                    const inputElement = form.querySelector(`input[name="${fieldName}"]`); // Активный инпут, если есть
+                                    
+                                    let currentValue;
+                                    
+                                    if (inputElement) {
+                                        // Если есть активное поле ввода (незаполненное поле студента)
+                                        currentValue = inputElement.value.trim();
+                                    } else {
+                                        // Если поля ввода нет (поле преподавателя или уже заполненное поле студента)
+                                        currentValue = prefilledValue;
                                     }
-                                });
-                                
-                                if (allRequiredFilled) {
-                                    await submitStudentDocument(doc.id, studentSubmissionData);
-                                } else {
-                                    displayMessage('Пожалуйста, заполните все обязательные поля в документе.', true);
+                                    
+                                    // 1. Валидация: проверяем на заполненность ТОЛЬКО поля Студента
+                                    if (role === 'Студент' && (!currentValue || currentValue.trim() === '')) {
+                                        allRequiredFilled = false; // Обязательное поле студента не заполнено
+                                    }
+                                    
+                                    // 2. Сбор данных для отправки: включаем все, что имеет значение (для сохранения данных Преподавателя)
+                                    if (currentValue) {
+                                        studentSubmissionData[fieldName] = currentValue;
+                                    }
                                 }
                             });
-                        }
+                            
+                            if (allRequiredFilled) {
+                                // Отправляем объект с данными, включая все собранные поля
+                                await submitStudentDocument(doc.id, studentSubmissionData);
+                            } else {
+                                displayMessage('Пожалуйста, заполните все обязательные поля в документе.', true);
+                            }
+                        });
 
 
                         card.appendChild(form);
